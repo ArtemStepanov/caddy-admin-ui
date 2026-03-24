@@ -5,7 +5,7 @@ all: build
 
 # Build backend
 build:
-	CC="zig cc" CGO_ENABLED=1 go build -o bin/caddy-admin-ui ./cmd/server
+	CGO_ENABLED=1 go build -o bin/caddy-admin-ui ./cmd/server
 
 # Build frontend
 frontend:
@@ -41,7 +41,7 @@ logs:
 
 # Run tests
 test:
-	CC="zig cc" CGO_ENABLED=1 go test ./...
+	CGO_ENABLED=1 go test ./...
 	cd web && npm test -- run
 
 # Clean build artifacts
