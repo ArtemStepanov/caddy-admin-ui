@@ -59,14 +59,14 @@ The Caddy URL can also be changed at runtime from the Settings page.
 
 ## Development
 
-Tooling versions are pinned in `mise.toml` (Go, Node.js, Zig).
+Go and GCC are installed via Homebrew. Node.js is managed by `mise.toml`.
 
 ```bash
 make deps            # install Go + JS dependencies
 make dev             # run backend dev server
 make dev-frontend    # run frontend dev server with HMR
 make test            # run all tests
-make build           # build backend binary (requires Zig for CGO/SQLite)
+make build           # build backend binary (requires GCC for CGO/SQLite)
 make frontend        # build frontend
 ```
 
@@ -80,7 +80,7 @@ Preact/TypeScript UI  ──/api/*──►  Go backend (Gin)  ──HTTP──�
 
 - **Backend** (`internal/`) — Go with Gin. Routes are stored in SQLite and synced to Caddy on every mutation.
 - **Frontend** (`web/`) — Preact + TypeScript. Minimal bundle, same React component model.
-- **SQLite** via `mattn/go-sqlite3` (requires CGO, built with Zig as C compiler).
+- **SQLite** via `mattn/go-sqlite3` (requires CGO, built with GCC).
 
 ## API
 
