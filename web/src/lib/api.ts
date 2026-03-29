@@ -17,6 +17,7 @@ export interface Route {
   config: any;
   headers?: HeaderConfig;
   enabled: boolean;
+  readonly?: boolean;
   created_at: string;
   updated_at: string;
 }

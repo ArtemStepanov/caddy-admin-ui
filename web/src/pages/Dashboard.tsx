@@ -67,6 +67,11 @@ function RouteCard({ route, onToggle, onDelete }: {
             <span class="bg-slate-700 px-2 py-0.5 rounded">
               {HANDLER_LABELS[route.handler_type] || route.handler_type}
             </span>
+            {route.readonly && (
+              <span class="bg-amber-600/30 text-amber-300 text-xs px-1.5 py-0.5 rounded" title="Imported route with unmanaged middleware. Handler config is read-only.">
+                imported
+              </span>
+            )}
             <span class="truncate">{getConfigSummary()}</span>
           </div>
 

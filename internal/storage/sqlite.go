@@ -167,6 +167,7 @@ func (s *SQLiteStorage) scanRoute(row *sql.Row) (*Route, error) {
 		route.RawCaddyRoute = json.RawMessage(rawCaddyRoute)
 	}
 	route.StripPathPrefix = stripPathPrefix
+	route.ReadOnly = len(route.RawCaddyRoute) > 0
 	return &route, nil
 }
 
@@ -190,6 +191,7 @@ func (s *SQLiteStorage) scanRouteRows(rows *sql.Rows) (*Route, error) {
 		route.RawCaddyRoute = json.RawMessage(rawCaddyRoute)
 	}
 	route.StripPathPrefix = stripPathPrefix
+	route.ReadOnly = len(route.RawCaddyRoute) > 0
 	return &route, nil
 }
 

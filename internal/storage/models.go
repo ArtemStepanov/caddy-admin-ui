@@ -18,6 +18,12 @@ type Route struct {
 	CreatedAt       time.Time       `json:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
 
+	// ReadOnly indicates that this route contains handlers we can't fully represent
+	// (e.g. subroutes with unmanaged middleware). The route type is detected for display,
+	// but handler-level edits (upstreams, headers, etc.) won't take effect on export.
+	// Domain/path edits and enable/disable still work.
+	ReadOnly bool `json:"readonly,omitempty"`
+
 	// RawCaddyRoute stores the original Caddy route JSON for preserving
 	// unsupported handlers during round-trip sync.
 	// It is not exposed in JSON responses by default (unless requested, but here we hide it).
