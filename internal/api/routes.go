@@ -10,9 +10,6 @@ import (
 func SetupRoutes(r *gin.Engine, store *storage.SQLiteStorage, defaultCaddyURL string) {
 	h := NewHandler(store, defaultCaddyURL)
 
-	// Enable CORS
-	r.Use(corsMiddleware())
-
 	api := r.Group("/api")
 	{
 		// Routes CRUD
@@ -33,20 +30,5 @@ func SetupRoutes(r *gin.Engine, store *storage.SQLiteStorage, defaultCaddyURL st
 		api.POST("/test-connection", h.TestConnection)
 		api.POST("/import-preview", h.PreviewImport)
 		api.POST("/import", h.ImportFromCaddy)
-	}
-}
-
-func corsMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
 	}
 }

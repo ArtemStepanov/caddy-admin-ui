@@ -548,20 +548,16 @@ func TestTestConnection_MissingURL(t *testing.T) {
 	}
 }
 
-func TestCORSHeaders(t *testing.T) {
+func TestNoCORSHeaders(t *testing.T) {
 	router, _, cleanup := setupTestRouter(t)
 	defer cleanup()
 
-	req := httptest.NewRequest("OPTIONS", "/api/routes", nil)
+	req := httptest.NewRequest("GET", "/api/routes", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != 204 {
-		t.Errorf("Expected status 204 for OPTIONS, got %d", w.Code)
-	}
-
-	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Error("Expected CORS header")
+	if w.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Error("Expected no Access-Control-Allow-Origin header")
 	}
 }
 
@@ -598,6 +594,71 @@ func TestListRoutes_WithRoutes(t *testing.T) {
 	}
 	if len(routes) != 2 {
 		t.Errorf("Expected 2 routes, got %d", len(routes))
+	}
+}
+
+func TestValidateCaddyURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{"valid http", "http://caddy:2019", false},
+		{"valid https", "https://caddy.example.com:2019", false},
+		{"valid localhost", "http://localhost:2019", false},
+		{"valid ip", "http://192.168.1.1:2019", false},
+		{"wrong scheme ftp", "ftp://caddy:2019", true},
+		{"wrong scheme javascript", "javascript:alert(1)", true},
+		{"empty string", "", true},
+		{"no host", "http://", true},
+		{"no scheme", "caddy:2019", true},
+		{"unparseable", "://invalid", true},
+		{"with path", "http://caddy:2019/admin", true},
+		{"with query", "http://caddy:2019?foo=bar", true},
+		{"with fragment", "http://caddy:2019#section", true},
+		{"with userinfo", "http://user:pass@caddy:2019", true},
+		{"trailing slash ok", "http://caddy:2019/", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateCaddyURL(tt.url)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateCaddyURL(%q) error = %v, wantErr %v", tt.url, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestUpdateConfig_RejectsInvalidURL(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	body := `{"caddy_admin_url": "ftp://bad:2019", "enable_encode": true}`
+
+	req := httptest.NewRequest("PUT", "/api/config", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d. Body: %s", http.StatusBadRequest, w.Code, w.Body.String())
+	}
+}
+
+func TestTestConnection_RejectsInvalidURL(t *testing.T) {
+	router, _, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	body := `{"url": "ftp://bad:2019"}`
+
+	req := httptest.NewRequest("POST", "/api/test-connection", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d. Body: %s", http.StatusBadRequest, w.Code, w.Body.String())
 	}
 }
 

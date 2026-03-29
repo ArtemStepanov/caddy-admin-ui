@@ -49,7 +49,7 @@ RUN mkdir -p /app/data
 ENV GIN_MODE=release
 ENV DB_PATH=/app/data/routes.db
 ENV CADDY_ADMIN_URL=http://localhost:2019
-ENV LISTEN_ADDR=:3000
+ENV LISTEN_ADDR=0.0.0.0:3000
 
 # Expose port
 EXPOSE 3000

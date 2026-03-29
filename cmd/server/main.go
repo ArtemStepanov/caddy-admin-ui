@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -15,7 +16,9 @@ func main() {
 	// Get configuration from environment
 	dbPath := getEnv("DB_PATH", "./data/routes.db")
 	caddyURL := getEnv("CADDY_ADMIN_URL", "http://localhost:2019")
-	listenAddr := getEnv("LISTEN_ADDR", ":3000")
+	listenAddr := getEnv("LISTEN_ADDR", "127.0.0.1:3000")
+	adminUser := os.Getenv("ADMIN_USER")
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
 
 	log.Printf("Starting Caddy Orchestrator Lite")
 	log.Printf("  Database: %s", dbPath)
@@ -35,7 +38,20 @@ func main() {
 	}
 	r := gin.Default()
 
-	// Setup API routes (pass URL string, not client - handlers use dynamic URL from GlobalConfig)
+	// Fail fast if only one credential is set
+	if (adminUser == "") != (adminPassword == "") {
+		log.Fatalf("Both ADMIN_USER and ADMIN_PASSWORD must be set together")
+	}
+
+	// Optional Basic Auth (protects everything: UI + API)
+	if adminUser != "" && adminPassword != "" {
+		r.Use(gin.BasicAuth(gin.Accounts{adminUser: adminPassword}))
+		log.Printf("  Basic Auth: enabled")
+	} else if !isLoopback(listenAddr) {
+		log.Printf("  WARNING: No authentication configured on a non-loopback address")
+	}
+
+	// Setup API routes
 	api.SetupRoutes(r, store, caddyURL)
 
 	// Serve static files (frontend)
@@ -72,4 +88,14 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// isLoopback checks if the listen address is bound to a loopback interface.
+// An empty host (e.g. ":3000") means all interfaces, which is NOT loopback.
+func isLoopback(addr string) bool {
+	host := addr
+	if i := strings.LastIndex(addr, ":"); i != -1 {
+		host = addr[:i]
+	}
+	return host == "127.0.0.1" || host == "::1" || host == "localhost"
 }

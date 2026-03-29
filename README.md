@@ -52,8 +52,14 @@ docker run -d \
 |----------|---------|-------------|
 | `CADDY_ADMIN_URL` | `http://localhost:2019` | Caddy Admin API URL |
 | `DB_PATH` | `/app/data/routes.db` | SQLite database path |
-| `LISTEN_ADDR` | `:3000` | Server listen address |
+| `LISTEN_ADDR` | `127.0.0.1:3000` | Server listen address (loopback by default) |
 | `GIN_MODE` | `debug` | Gin mode (`debug` / `release`) |
+| `ADMIN_USER` | _(empty)_ | Basic Auth username (optional) |
+| `ADMIN_PASSWORD` | _(empty)_ | Basic Auth password (optional) |
+
+The server binds to localhost by default. In Docker, it binds to `0.0.0.0:3000` so port mapping works.
+
+When `ADMIN_USER` and `ADMIN_PASSWORD` are both set, the entire app (UI + API) is protected with HTTP Basic Auth. The browser shows a native login dialog.
 
 The Caddy URL can also be changed at runtime from the Settings page.
 
