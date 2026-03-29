@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +13,36 @@ import (
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/config"
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/storage"
 )
+
+// validateCaddyURL checks that a URL is a valid http(s) origin (scheme + host + optional port).
+func validateCaddyURL(rawURL string) error {
+	if rawURL == "" {
+		return fmt.Errorf("URL must not be empty")
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("URL scheme must be http or https, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("URL must have a host")
+	}
+	if u.Path != "" && u.Path != "/" {
+		return fmt.Errorf("URL must not contain a path")
+	}
+	if u.RawQuery != "" {
+		return fmt.Errorf("URL must not contain query parameters")
+	}
+	if u.Fragment != "" {
+		return fmt.Errorf("URL must not contain a fragment")
+	}
+	if u.User != nil {
+		return fmt.Errorf("URL must not contain credentials")
+	}
+	return nil
+}
 
 // Handler contains all HTTP handlers
 type Handler struct {
@@ -215,6 +247,13 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 		return
 	}
 
+	if cfg.CaddyAdminURL != "" {
+		if err := validateCaddyURL(cfg.CaddyAdminURL); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
 	if err := h.store.SetGlobalConfig(&cfg); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -283,6 +322,11 @@ func (h *Handler) TestConnection(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := validateCaddyURL(req.URL); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

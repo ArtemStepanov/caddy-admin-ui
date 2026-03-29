@@ -47,9 +47,11 @@ cd web && npx tsc --noEmit            # type-check only
 |----------|---------|---------|
 | `CADDY_ADMIN_URL` | `http://localhost:2019` | Caddy Admin API endpoint |
 | `DB_PATH` | `/app/data/routes.db` | SQLite database path |
-| `LISTEN_ADDR` | `:3000` | Server listen address |
+| `LISTEN_ADDR` | `127.0.0.1:3000` | Server listen address (loopback by default) |
 | `GIN_MODE` | `debug` | Gin framework mode |
 | `WEB_DIR` | `./web/dist` | Frontend static files directory |
+| `ADMIN_USER` | _(empty, auth disabled)_ | Basic Auth username |
+| `ADMIN_PASSWORD` | _(empty, auth disabled)_ | Basic Auth password |
 
 ## Architecture
 
