@@ -63,6 +63,16 @@ type Match struct {
 // Handler is a generic handler
 type Handler map[string]any
 
+// managedHandlerTypes lists handler types that our model can fully represent and rebuild.
+var managedHandlerTypes = map[string]bool{
+	"reverse_proxy":   true,
+	"file_server":     true,
+	"static_response": true,
+	"headers":         true,
+	"encode":          true,
+	"rewrite":         true,
+}
+
 // BuildCaddyConfig converts stored routes to Caddy JSON config
 func BuildCaddyConfig(routes []*storage.Route, global *storage.GlobalConfig) *CaddyConfig {
 	// Always preserve admin listener on 0.0.0.0:2019 so we can continue managing Caddy
@@ -315,28 +325,13 @@ func buildRouteMerged(r *storage.Route, global *storage.GlobalConfig) *Route {
 		}
 	}
 
-	if hasSubroute {
-		// Preserve original handlers as-is; only matchers were updated above.
-		// Skip rebuilding handlers to avoid duplicating or losing nested handlers.
-		// Note: this means handler-level edits (upstreams, headers) on subroute-imported
-		// routes won't take effect on export. This is acceptable because these routes
-		// were previously undetectable ("unknown") and contain middleware (crowdsec, etc.)
-		// that we can't represent. Full edit support would require walking into the
-		// subroute to replace managed handlers in-place.
-	} else {
+	if !hasSubroute {
+		// Non-subroute route: rebuild handlers by replacing managed types with ours
+		// and preserving unknown handlers.
 		var unknownHandlers []Handler
-		managedTypes := map[string]bool{
-			"reverse_proxy":   true,
-			"file_server":     true,
-			"static_response": true,
-			"headers":         true,
-			"encode":          true,
-			"rewrite":         true,
-		}
-
 		for _, h := range original.Handle {
 			hType, _ := h["handler"].(string)
-			if !managedTypes[hType] {
+			if !managedHandlerTypes[hType] {
 				unknownHandlers = append(unknownHandlers, h)
 			}
 		}
@@ -348,6 +343,10 @@ func buildRouteMerged(r *storage.Route, global *storage.GlobalConfig) *Route {
 
 		original.Handle = newHandlers
 	}
+	// else: subroute route — preserve original handlers as-is. Only matchers
+	// were updated above. Handler-level edits won't take effect on export,
+	// which is acceptable because these routes contain middleware (crowdsec, etc.)
+	// that we can't represent.
 
 	original.Terminal = true
 

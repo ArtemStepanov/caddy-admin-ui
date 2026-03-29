@@ -108,19 +108,17 @@ func parseRoute(r Route) (*storage.Route, error) {
 			}
 
 		case "static_response":
-			// Check if it's a redirect (has Location header)
-			if headers, ok := h["headers"].(map[string]any); ok {
-				if _, hasLoc := headers["Location"]; hasLoc {
-					if mainHandlerFound {
-						continue
-					}
+			// Only treat as redirect if it has a Location header
+			if isRedirectStaticResponse(h) {
+				if mainHandlerFound {
+					continue
+				}
 
-					cfg, err := parseRedirect(h)
-					if err == nil {
-						storageRoute.HandlerType = "redir"
-						storageRoute.Config, _ = json.Marshal(cfg)
-						mainHandlerFound = true
-					}
+				cfg, err := parseRedirect(h)
+				if err == nil {
+					storageRoute.HandlerType = "redir"
+					storageRoute.Config, _ = json.Marshal(cfg)
+					mainHandlerFound = true
 				}
 			}
 
@@ -151,21 +149,23 @@ func parseRoute(r Route) (*storage.Route, error) {
 		// (editable) instead of buildRouteMerged (read-only preservation).
 		if allHandlersManaged(allHandlers) {
 			storageRoute.RawCaddyRoute = nil
+		} else {
+			// Route has unmanaged middleware (e.g. crowdsec) — type is detected but
+			// handler-level edits won't propagate on export since we preserve the
+			// original subroute structure. Mark as read-only so the UI can indicate this.
+			storageRoute.ReadOnly = true
 		}
 	} else {
 		// Flattening didn't work (complex subroute). Do a deep search through
 		// the entire handler tree to at least identify the handler type for display.
 		// The original JSON is preserved in RawCaddyRoute, so it will be synced back as is.
 		if detected := detectDeepHandlerType(r.Handle); detected != "" {
-			// Normalize: Caddy uses "static_response" but our model uses "redir"
-			if detected == "static_response" {
-				detected = "redir"
-			}
 			storageRoute.HandlerType = detected
 		} else {
 			storageRoute.HandlerType = "unknown"
 		}
 		storageRoute.Config = json.RawMessage("{}")
+		storageRoute.ReadOnly = true
 	}
 
 	return storageRoute, nil
@@ -240,17 +240,9 @@ func extractSimpleSubrouteHandlers(h Handler) []Handler {
 // allHandlersManaged returns true if every handler in the list is a type
 // we can fully represent and rebuild in our model.
 func allHandlersManaged(handlers []Handler) bool {
-	managed := map[string]bool{
-		"reverse_proxy":   true,
-		"file_server":     true,
-		"static_response": true,
-		"headers":         true,
-		"encode":          true,
-		"rewrite":         true,
-	}
 	for _, h := range handlers {
 		hType, _ := h["handler"].(string)
-		if !managed[hType] {
+		if !managedHandlerTypes[hType] {
 			return false
 		}
 	}
@@ -260,13 +252,14 @@ func allHandlersManaged(handlers []Handler) bool {
 // detectDeepHandlerType recursively searches through all handlers (including
 // nested subroutes) to find a main handler type. Used as a fallback when
 // flattenHandlers can't extract handlers from complex subroute structures.
-// Prioritizes reverse_proxy and file_server over static_response, since
-// static_response is often used as auxiliary middleware (e.g. websocket blocking).
+// Prioritizes reverse_proxy and file_server over static_response (redirect only),
+// since static_response is often used as auxiliary middleware (e.g. websocket blocking).
+// Only static_response handlers with a Location header are treated as redirects.
 func detectDeepHandlerType(handlers []Handler) string {
 	var found []string
 	collectDeepHandlerTypes(handlers, &found)
 
-	// Prefer reverse_proxy > file_server > static_response
+	// Prefer reverse_proxy > file_server > redir (redirect static_response)
 	for _, t := range found {
 		if t == "reverse_proxy" {
 			return t
@@ -278,7 +271,7 @@ func detectDeepHandlerType(handlers []Handler) string {
 		}
 	}
 	for _, t := range found {
-		if t == "static_response" {
+		if t == "redir" {
 			return t
 		}
 	}
@@ -286,18 +279,17 @@ func detectDeepHandlerType(handlers []Handler) string {
 }
 
 func collectDeepHandlerTypes(handlers []Handler, found *[]string) {
-	mainTypes := map[string]bool{
-		"reverse_proxy":   true,
-		"file_server":     true,
-		"static_response": true,
-	}
-
 	for _, h := range handlers {
 		hType, _ := h["handler"].(string)
-		if mainTypes[hType] {
+		switch hType {
+		case "reverse_proxy", "file_server":
 			*found = append(*found, hType)
-		}
-		if hType == "subroute" {
+		case "static_response":
+			// Only treat as redirect if it has a Location header
+			if isRedirectStaticResponse(h) {
+				*found = append(*found, "redir")
+			}
+		case "subroute":
 			if routes, ok := h["routes"].([]any); ok {
 				for _, r := range routes {
 					if routeMap, ok := r.(map[string]any); ok {
@@ -315,6 +307,17 @@ func collectDeepHandlerTypes(handlers []Handler, found *[]string) {
 			}
 		}
 	}
+}
+
+// isRedirectStaticResponse checks whether a static_response handler is a redirect
+// by looking for a Location header.
+func isRedirectStaticResponse(h Handler) bool {
+	headers, ok := h["headers"].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, hasLocation := headers["Location"]
+	return hasLocation
 }
 
 func createRawRoute(r Route) *storage.Route {

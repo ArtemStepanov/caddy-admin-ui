@@ -26,6 +26,7 @@ export function RouteForm({ id }: RouteFormProps) {
   const [config, setConfig] = useState<any>({ upstreams: [], websocket: false, headers: {}, load_balancing: 'round_robin' });
   const [headers, setHeaders] = useState(getDefaultHeaderConfig());
   const [showHeaders, setShowHeaders] = useState(false);
+  const [readOnly, setReadOnly] = useState(false);
 
   useEffect(() => {
     if (isEdit) {
@@ -41,6 +42,7 @@ export function RouteForm({ id }: RouteFormProps) {
       setStripPathPrefix(route.strip_path_prefix || '');
       setHandlerType(route.handler_type);
       setConfig(typeof route.config === 'string' ? JSON.parse(route.config) : route.config);
+      setReadOnly(route.readonly || false);
       if (route.headers) {
         setHeaders(route.headers);
       }
@@ -116,6 +118,12 @@ export function RouteForm({ id }: RouteFormProps) {
         </div>
       )}
 
+      {readOnly && (
+        <div class="bg-amber-900/50 border border-amber-700 rounded-lg p-4 mb-6 text-amber-300">
+          This route was imported with unmanaged middleware (e.g. crowdsec, appsec) and its handler configuration is read-only. You can still edit the domain, path, and enable/disable the route.
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} class="space-y-8">
         {/* Domain & Path */}
         <div class="card">
@@ -185,7 +193,7 @@ export function RouteForm({ id }: RouteFormProps) {
         </div>
 
         {/* Handler Type Selection */}
-        <div class="card">
+        <div class={readOnly ? 'card opacity-60 pointer-events-none' : 'card'}>
           <h2 class="text-lg font-semibold mb-4">Handler Type</h2>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             {HANDLER_TYPES.map((type) => (
@@ -198,6 +206,7 @@ export function RouteForm({ id }: RouteFormProps) {
                     ? 'ring-2 ring-primary-500 border-primary-500'
                     : 'hover:border-slate-600'
                 }`}
+                disabled={readOnly}
               >
                 <div class="text-2xl mb-2">{type.icon}</div>
                 <div class="font-medium">{type.name}</div>
@@ -208,17 +217,17 @@ export function RouteForm({ id }: RouteFormProps) {
         </div>
 
         {/* Handler-specific config */}
-        <div class="card">
+        <div class={readOnly ? 'card opacity-60 pointer-events-none' : 'card'}>
           <h2 class="text-lg font-semibold mb-4">Handler Configuration</h2>
-          
+
           {handlerType === 'reverse_proxy' && (
             <ReverseProxyConfig config={config} onChange={setConfig} />
           )}
-          
+
           {handlerType === 'file_server' && (
             <FileServerConfig config={config} onChange={setConfig} />
           )}
-          
+
           {handlerType === 'redir' && (
             <RedirectConfig config={config} onChange={setConfig} />
           )}

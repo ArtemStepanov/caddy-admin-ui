@@ -797,6 +797,10 @@ func TestParseCaddyConfig_RealCaddyfileStructure(t *testing.T) {
 	if len(rpCfg.Upstreams) != 1 || rpCfg.Upstreams[0] != "docker-hp:2111" {
 		t.Errorf("Expected upstreams [docker-hp:2111], got %v", rpCfg.Upstreams)
 	}
+	// Route has unmanaged middleware (crowdsec, appsec), should be read-only
+	if !route.ReadOnly {
+		t.Error("Expected ReadOnly to be true for route with unmanaged middleware")
+	}
 }
 
 func TestParseCaddyConfig_NestedSubroutes(t *testing.T) {
@@ -915,6 +919,10 @@ func TestParseCaddyConfig_SubrouteWithMatchers(t *testing.T) {
 	if len(route.RawCaddyRoute) == 0 {
 		t.Error("Expected RawCaddyRoute to be preserved")
 	}
+	// Complex subroute should be read-only
+	if !route.ReadOnly {
+		t.Error("Expected ReadOnly to be true for complex subroute with matchers")
+	}
 }
 
 func TestParseCaddyConfig_SubrouteWithUnmanagedHandler(t *testing.T) {
@@ -972,6 +980,10 @@ func TestParseCaddyConfig_SubrouteWithUnmanagedHandler(t *testing.T) {
 	// RawCaddyRoute should preserve the full original including crowdsec
 	if len(route.RawCaddyRoute) == 0 {
 		t.Error("Expected RawCaddyRoute to be preserved")
+	}
+	// Route has unmanaged middleware (crowdsec), should be read-only
+	if !route.ReadOnly {
+		t.Error("Expected ReadOnly to be true for route with unmanaged middleware")
 	}
 }
 
@@ -1164,6 +1176,10 @@ func TestRoundTrip_TrivialSubrouteEditable(t *testing.T) {
 	if len(imported.RawCaddyRoute) != 0 {
 		t.Error("Expected RawCaddyRoute to be cleared for trivial subroute (fully editable)")
 	}
+	// Trivial subroute with all managed handlers should NOT be read-only
+	if imported.ReadOnly {
+		t.Error("Expected ReadOnly to be false for trivial subroute (fully editable)")
+	}
 
 	// Simulate user editing upstreams
 	imported.Config = json.RawMessage(`{"upstreams":["localhost:9999"]}`)
@@ -1275,5 +1291,163 @@ func TestRoundTrip_SubrouteImport(t *testing.T) {
 	handlerType, _ := exportedRoute.Handle[0]["handler"].(string)
 	if handlerType != "subroute" {
 		t.Errorf("Expected subroute handler preserved, got %s", handlerType)
+	}
+}
+
+func TestParseCaddyConfig_SubrouteNonRedirectStaticResponse(t *testing.T) {
+	// A static_response without a Location header (e.g. error page, websocket blocker)
+	// should NOT be labeled "redir" — it should be "unknown" since we can't represent it.
+	cfg := &CaddyConfig{
+		Apps: &Apps{
+			HTTP: &HTTPApp{
+				Servers: map[string]*Server{
+					"srv0": {
+						Listen: []string{":443"},
+						Routes: []Route{
+							{
+								Match: []Match{
+									{Host: []string{"example.com"}},
+								},
+								Handle: []Handler{
+									{
+										"handler": "subroute",
+										"routes": []any{
+											map[string]any{
+												"match": []any{
+													map[string]any{
+														"path": []any{"/blocked"},
+													},
+												},
+												"handle": []any{
+													map[string]any{
+														"handler":     "static_response",
+														"status_code": float64(403),
+														"body":        "Forbidden",
+													},
+												},
+											},
+										},
+									},
+								},
+								Terminal: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	route := routes[0]
+	// Non-redirect static_response should be "unknown", not "redir"
+	if route.HandlerType == "redir" {
+		t.Errorf("Non-redirect static_response should not be labeled 'redir', got %s", route.HandlerType)
+	}
+	if route.HandlerType != "unknown" {
+		t.Errorf("Expected handler_type 'unknown' for non-redirect static_response, got %s", route.HandlerType)
+	}
+}
+
+func TestParseCaddyConfig_SubrouteRedirectStaticResponse(t *testing.T) {
+	// A static_response WITH a Location header should be detected as "redir" via deep search.
+	cfg := &CaddyConfig{
+		Apps: &Apps{
+			HTTP: &HTTPApp{
+				Servers: map[string]*Server{
+					"srv0": {
+						Listen: []string{":443"},
+						Routes: []Route{
+							{
+								Match: []Match{
+									{Host: []string{"old.example.com"}},
+								},
+								Handle: []Handler{
+									{
+										"handler": "subroute",
+										"routes": []any{
+											map[string]any{
+												"match": []any{
+													map[string]any{
+														"path": []any{"/*"},
+													},
+												},
+												"handle": []any{
+													map[string]any{
+														"handler":     "static_response",
+														"status_code": float64(301),
+														"headers": map[string]any{
+															"Location": []any{"https://new.example.com{http.request.uri}"},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								Terminal: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	route := routes[0]
+	if route.HandlerType != "redir" {
+		t.Errorf("Expected handler_type 'redir' for redirect static_response, got %s", route.HandlerType)
+	}
+}
+
+func TestParseCaddyConfig_SubrouteEmptyHandlers(t *testing.T) {
+	// Subroute with an inner route that has no handlers — should fall through to unknown.
+	cfg := &CaddyConfig{
+		Apps: &Apps{
+			HTTP: &HTTPApp{
+				Servers: map[string]*Server{
+					"srv0": {
+						Listen: []string{":443"},
+						Routes: []Route{
+							{
+								Match: []Match{
+									{Host: []string{"example.com"}},
+								},
+								Handle: []Handler{
+									{
+										"handler": "subroute",
+										"routes": []any{
+											map[string]any{
+												"handle": []any{},
+											},
+										},
+									},
+								},
+								Terminal: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	route := routes[0]
+	if route.HandlerType != "unknown" {
+		t.Errorf("Expected handler_type 'unknown' for empty subroute, got %s", route.HandlerType)
 	}
 }
