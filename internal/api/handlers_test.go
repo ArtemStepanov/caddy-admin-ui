@@ -548,20 +548,16 @@ func TestTestConnection_MissingURL(t *testing.T) {
 	}
 }
 
-func TestCORSHeaders(t *testing.T) {
+func TestNoCORSHeaders(t *testing.T) {
 	router, _, cleanup := setupTestRouter(t)
 	defer cleanup()
 
-	req := httptest.NewRequest("OPTIONS", "/api/routes", nil)
+	req := httptest.NewRequest("GET", "/api/routes", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != 204 {
-		t.Errorf("Expected status 204 for OPTIONS, got %d", w.Code)
-	}
-
-	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Error("Expected CORS header")
+	if w.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Error("Expected no Access-Control-Allow-Origin header")
 	}
 }
 
