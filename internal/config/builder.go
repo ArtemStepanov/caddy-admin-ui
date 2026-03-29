@@ -303,35 +303,52 @@ func buildRouteMerged(r *storage.Route, global *storage.GlobalConfig) *Route {
 	// If we find an unknown handler, we add it.
 	// We inject our Main Handler at the first position where a "managed" handler was, or at end.
 
-	var unknownHandlers []Handler
-	managedTypes := map[string]bool{
-		"reverse_proxy":   true,
-		"file_server":     true,
-		"static_response": true, // could be redir or something else, but we treat it as managed if we are in redir mode
-		"headers":         true,
-		"encode":          true,
-		"rewrite":         true,
-	}
-
+	// Check if the original route uses subroute wrappers (Caddyfile-generated).
+	// If so, preserve the entire original handler chain — the main handler lives
+	// inside the subroute alongside middleware we can't represent (crowdsec, etc.),
+	// so rebuilding from scratch would lose those handlers.
+	hasSubroute := false
 	for _, h := range original.Handle {
-		hType, _ := h["handler"].(string)
-		if !managedTypes[hType] {
-			unknownHandlers = append(unknownHandlers, h)
+		if hType, _ := h["handler"].(string); hType == "subroute" {
+			hasSubroute = true
+			break
 		}
 	}
 
-	// Now construct final list:
-	// [encode] + [headers] + [unknowns] + [mainHandler]
-	// This puts unknown middlewares before the final handler (reverse_proxy is terminal usually).
-	// If unknown handler is a terminal one (like `acme_server`), it might conflict if we also add reverse_proxy.
-	// But usually we only have one terminal handler.
+	if hasSubroute {
+		// Preserve original handlers as-is; only matchers were updated above.
+		// Skip rebuilding handlers to avoid duplicating or losing nested handlers.
+		// Note: this means handler-level edits (upstreams, headers) on subroute-imported
+		// routes won't take effect on export. This is acceptable because these routes
+		// were previously undetectable ("unknown") and contain middleware (crowdsec, etc.)
+		// that we can't represent. Full edit support would require walking into the
+		// subroute to replace managed handlers in-place.
+	} else {
+		var unknownHandlers []Handler
+		managedTypes := map[string]bool{
+			"reverse_proxy":   true,
+			"file_server":     true,
+			"static_response": true,
+			"headers":         true,
+			"encode":          true,
+			"rewrite":         true,
+		}
 
-	newHandlers = append(newHandlers, unknownHandlers...)
-	if mainHandler != nil {
-		newHandlers = append(newHandlers, mainHandler)
+		for _, h := range original.Handle {
+			hType, _ := h["handler"].(string)
+			if !managedTypes[hType] {
+				unknownHandlers = append(unknownHandlers, h)
+			}
+		}
+
+		newHandlers = append(newHandlers, unknownHandlers...)
+		if mainHandler != nil {
+			newHandlers = append(newHandlers, mainHandler)
+		}
+
+		original.Handle = newHandlers
 	}
 
-	original.Handle = newHandlers
 	original.Terminal = true
 
 	return &original

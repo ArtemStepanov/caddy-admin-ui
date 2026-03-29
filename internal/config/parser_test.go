@@ -550,3 +550,730 @@ func TestRoundTrip_StripPathPrefix(t *testing.T) {
 		t.Errorf("Expected path /api/*, got %s", parsed.Path)
 	}
 }
+
+func TestParseCaddyConfig_SubrouteReverseProxy(t *testing.T) {
+	// This is how Caddy generates config from Caddyfile — handlers are wrapped in subroute
+	cfg := &CaddyConfig{
+		Apps: &Apps{
+			HTTP: &HTTPApp{
+				Servers: map[string]*Server{
+					"srv0": {
+						Listen: []string{":443"},
+						Routes: []Route{
+							{
+								Match: []Match{
+									{Host: []string{"example.com"}},
+								},
+								Handle: []Handler{
+									{
+										"handler": "subroute",
+										"routes": []any{
+											map[string]any{
+												"handle": []any{
+													map[string]any{
+														"handler": "reverse_proxy",
+														"upstreams": []any{
+															map[string]any{"dial": "localhost:8080"},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								Terminal: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("Expected 1 route, got %d", len(routes))
+	}
+
+	route := routes[0]
+	if route.Domain != "example.com" {
+		t.Errorf("Expected domain example.com, got %s", route.Domain)
+	}
+	if route.HandlerType != "reverse_proxy" {
+		t.Errorf("Expected handler_type reverse_proxy, got %s", route.HandlerType)
+	}
+
+	var rpCfg storage.ReverseProxyConfig
+	json.Unmarshal(route.Config, &rpCfg)
+	if len(rpCfg.Upstreams) != 1 || rpCfg.Upstreams[0] != "localhost:8080" {
+		t.Errorf("Expected upstreams [localhost:8080], got %v", rpCfg.Upstreams)
+	}
+}
+
+func TestParseCaddyConfig_SubrouteWithHeaders(t *testing.T) {
+	// Subroute containing both headers and reverse_proxy handlers
+	cfg := &CaddyConfig{
+		Apps: &Apps{
+			HTTP: &HTTPApp{
+				Servers: map[string]*Server{
+					"srv0": {
+						Listen: []string{":443"},
+						Routes: []Route{
+							{
+								Match: []Match{
+									{Host: []string{"example.com"}},
+								},
+								Handle: []Handler{
+									{
+										"handler": "subroute",
+										"routes": []any{
+											map[string]any{
+												"handle": []any{
+													map[string]any{
+														"handler": "headers",
+														"response": map[string]any{
+															"set": map[string]any{
+																"X-Frame-Options": []any{"DENY"},
+															},
+														},
+													},
+													map[string]any{
+														"handler": "reverse_proxy",
+														"upstreams": []any{
+															map[string]any{"dial": "localhost:9000"},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								Terminal: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	route := routes[0]
+	if route.HandlerType != "reverse_proxy" {
+		t.Errorf("Expected handler_type reverse_proxy, got %s", route.HandlerType)
+	}
+	if route.Headers == nil {
+		t.Fatal("Expected headers to be parsed")
+	}
+	if route.Headers.Set["X-Frame-Options"] != "DENY" {
+		t.Errorf("Expected Set X-Frame-Options=DENY, got %v", route.Headers.Set)
+	}
+}
+
+func TestParseCaddyConfig_SubrouteFromJSON(t *testing.T) {
+	// Simulate actual Caddy API JSON response (as returned by Caddyfile-configured instances)
+	raw := []byte(`{
+		"apps": {
+			"http": {
+				"servers": {
+					"srv0": {
+						"listen": [":443"],
+						"routes": [
+							{
+								"match": [{"host": ["app.example.com"]}],
+								"handle": [{
+									"handler": "subroute",
+									"routes": [{
+										"handle": [{
+											"handler": "reverse_proxy",
+											"upstreams": [{"dial": "localhost:3000"}]
+										}]
+									}]
+								}],
+								"terminal": true
+							}
+						]
+					}
+				}
+			}
+		}
+	}`)
+
+	var cfg CaddyConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	routes, err := ParseCaddyConfig(&cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("Expected 1 route, got %d", len(routes))
+	}
+
+	route := routes[0]
+	if route.HandlerType != "reverse_proxy" {
+		t.Errorf("Expected handler_type reverse_proxy, got %s", route.HandlerType)
+	}
+	if route.Domain != "app.example.com" {
+		t.Errorf("Expected domain app.example.com, got %s", route.Domain)
+	}
+}
+
+func TestParseCaddyConfig_RealCaddyfileStructure(t *testing.T) {
+	// Real Caddy config from Caddyfile: nested subroutes with crowdsec + appsec + reverse_proxy
+	raw := []byte(`{
+		"apps": {
+			"http": {
+				"servers": {
+					"srv0": {
+						"listen": [":443"],
+						"routes": [
+							{
+								"match": [{"host": ["app.example.com"]}],
+								"handle": [{
+									"handler": "subroute",
+									"routes": [{
+										"handle": [{
+											"handler": "subroute",
+											"routes": [{
+												"handle": [
+													{"handler": "crowdsec"},
+													{"handler": "appsec"},
+													{
+														"handler": "reverse_proxy",
+														"headers": {
+															"request": {
+																"set": {
+																	"X-Forwarded-For": ["{http.vars.client_ip}"],
+																	"X-Real-Ip": ["{http.vars.client_ip}"]
+																}
+															}
+														},
+														"upstreams": [{"dial": "docker-hp:2111"}]
+													}
+												]
+											}]
+										}]
+									}]
+								}],
+								"terminal": true
+							}
+						]
+					}
+				}
+			}
+		}
+	}`)
+
+	var cfg CaddyConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	routes, err := ParseCaddyConfig(&cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	route := routes[0]
+	if route.Domain != "app.example.com" {
+		t.Errorf("Expected domain app.example.com, got %s", route.Domain)
+	}
+	if route.HandlerType != "reverse_proxy" {
+		t.Errorf("Expected handler_type reverse_proxy, got %s", route.HandlerType)
+	}
+
+	var rpCfg storage.ReverseProxyConfig
+	json.Unmarshal(route.Config, &rpCfg)
+	if len(rpCfg.Upstreams) != 1 || rpCfg.Upstreams[0] != "docker-hp:2111" {
+		t.Errorf("Expected upstreams [docker-hp:2111], got %v", rpCfg.Upstreams)
+	}
+}
+
+func TestParseCaddyConfig_NestedSubroutes(t *testing.T) {
+	// Subroute inside subroute (both without matchers)
+	cfg := &CaddyConfig{
+		Apps: &Apps{
+			HTTP: &HTTPApp{
+				Servers: map[string]*Server{
+					"srv0": {
+						Listen: []string{":443"},
+						Routes: []Route{
+							{
+								Match: []Match{
+									{Host: []string{"example.com"}},
+								},
+								Handle: []Handler{
+									{
+										"handler": "subroute",
+										"routes": []any{
+											map[string]any{
+												"handle": []any{
+													map[string]any{
+														"handler": "subroute",
+														"routes": []any{
+															map[string]any{
+																"handle": []any{
+																	map[string]any{
+																		"handler": "file_server",
+																		"root":    "/srv",
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								Terminal: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	route := routes[0]
+	if route.HandlerType != "file_server" {
+		t.Errorf("Expected handler_type file_server, got %s", route.HandlerType)
+	}
+}
+
+func TestParseCaddyConfig_SubrouteWithMatchers(t *testing.T) {
+	// Subroute with nested matchers (e.g. from handle_path) should stay "unknown"
+	// to avoid losing routing semantics
+	cfg := &CaddyConfig{
+		Apps: &Apps{
+			HTTP: &HTTPApp{
+				Servers: map[string]*Server{
+					"srv0": {
+						Listen: []string{":443"},
+						Routes: []Route{
+							{
+								Match: []Match{
+									{Host: []string{"example.com"}},
+								},
+								Handle: []Handler{
+									{
+										"handler": "subroute",
+										"routes": []any{
+											map[string]any{
+												"match": []any{
+													map[string]any{
+														"path": []any{"/api/*"},
+													},
+												},
+												"handle": []any{
+													map[string]any{
+														"handler": "reverse_proxy",
+														"upstreams": []any{
+															map[string]any{"dial": "localhost:8080"},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								Terminal: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	route := routes[0]
+	// Deep detection should find reverse_proxy even inside complex subroute
+	if route.HandlerType != "reverse_proxy" {
+		t.Errorf("Expected handler_type reverse_proxy (deep detected), got %s", route.HandlerType)
+	}
+	// Raw route should be preserved
+	if len(route.RawCaddyRoute) == 0 {
+		t.Error("Expected RawCaddyRoute to be preserved")
+	}
+}
+
+func TestParseCaddyConfig_SubrouteWithUnmanagedHandler(t *testing.T) {
+	// Subroute containing unmanaged handlers (crowdsec, appsec) alongside reverse_proxy.
+	// Should detect reverse_proxy type — unmanaged handlers are preserved in RawCaddyRoute.
+	cfg := &CaddyConfig{
+		Apps: &Apps{
+			HTTP: &HTTPApp{
+				Servers: map[string]*Server{
+					"srv0": {
+						Listen: []string{":443"},
+						Routes: []Route{
+							{
+								Match: []Match{
+									{Host: []string{"example.com"}},
+								},
+								Handle: []Handler{
+									{
+										"handler": "subroute",
+										"routes": []any{
+											map[string]any{
+												"handle": []any{
+													map[string]any{
+														"handler": "crowdsec",
+													},
+													map[string]any{
+														"handler": "reverse_proxy",
+														"upstreams": []any{
+															map[string]any{"dial": "localhost:8080"},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								Terminal: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	route := routes[0]
+	if route.HandlerType != "reverse_proxy" {
+		t.Errorf("Expected handler_type reverse_proxy, got %s", route.HandlerType)
+	}
+	// RawCaddyRoute should preserve the full original including crowdsec
+	if len(route.RawCaddyRoute) == 0 {
+		t.Error("Expected RawCaddyRoute to be preserved")
+	}
+}
+
+func TestParseCaddyConfig_MultiRouteSubroute(t *testing.T) {
+	// Subroute with multiple inner routes should stay "unknown" even without matchers
+	// because route boundaries and terminal flags change Caddy's behavior
+	cfg := &CaddyConfig{
+		Apps: &Apps{
+			HTTP: &HTTPApp{
+				Servers: map[string]*Server{
+					"srv0": {
+						Listen: []string{":443"},
+						Routes: []Route{
+							{
+								Match: []Match{
+									{Host: []string{"example.com"}},
+								},
+								Handle: []Handler{
+									{
+										"handler": "subroute",
+										"routes": []any{
+											map[string]any{
+												"handle": []any{
+													map[string]any{
+														"handler": "reverse_proxy",
+														"upstreams": []any{
+															map[string]any{"dial": "localhost:8080"},
+														},
+													},
+												},
+											},
+											map[string]any{
+												"handle": []any{
+													map[string]any{
+														"handler": "headers",
+														"response": map[string]any{
+															"set": map[string]any{
+																"X-Debug": []any{"true"},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								Terminal: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	route := routes[0]
+	// Deep detection should find reverse_proxy even in multi-route subroute
+	if route.HandlerType != "reverse_proxy" {
+		t.Errorf("Expected handler_type reverse_proxy (deep detected), got %s", route.HandlerType)
+	}
+}
+
+func TestRoundTrip_UnknownSubroutePreserved(t *testing.T) {
+	// Complex subroute (with matchers) should be preserved as-is on round-trip
+	raw := []byte(`{
+		"apps": {
+			"http": {
+				"servers": {
+					"srv0": {
+						"listen": [":443"],
+						"routes": [
+							{
+								"match": [{"host": ["example.com"]}],
+								"handle": [{
+									"handler": "subroute",
+									"routes": [
+										{
+											"match": [{"path": ["/api/*"]}],
+											"handle": [{
+												"handler": "reverse_proxy",
+												"upstreams": [{"dial": "localhost:8080"}]
+											}]
+										}
+									]
+								}],
+								"terminal": true
+							}
+						]
+					}
+				}
+			}
+		}
+	}`)
+
+	var cfg CaddyConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Import — should detect reverse_proxy via deep search despite nested matchers
+	routes, err := ParseCaddyConfig(&cfg)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	imported := routes[0]
+	if imported.HandlerType != "reverse_proxy" {
+		t.Fatalf("Expected reverse_proxy, got %s", imported.HandlerType)
+	}
+
+	// Export — should preserve the subroute handler (not strip it)
+	exportedConfig := BuildCaddyConfig(routes, nil)
+
+	exportedJSON, err := json.Marshal(exportedConfig)
+	if err != nil {
+		t.Fatalf("Failed to marshal: %v", err)
+	}
+
+	var exportedCfg CaddyConfig
+	if err := json.Unmarshal(exportedJSON, &exportedCfg); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	server := exportedCfg.Apps.HTTP.Servers["srv0"]
+	if len(server.Routes) != 1 {
+		t.Fatalf("Expected 1 exported route, got %d", len(server.Routes))
+	}
+
+	exportedRoute := server.Routes[0]
+	// The subroute should be preserved (not stripped)
+	if len(exportedRoute.Handle) == 0 {
+		t.Fatal("Expected handlers to be preserved for unknown subroute route")
+	}
+
+	handlerType, _ := exportedRoute.Handle[0]["handler"].(string)
+	if handlerType != "subroute" {
+		t.Errorf("Expected preserved subroute handler, got %s", handlerType)
+	}
+}
+
+func TestRoundTrip_TrivialSubrouteEditable(t *testing.T) {
+	// A trivial subroute with only managed handlers should be fully editable:
+	// RawCaddyRoute is cleared, so edits to upstreams/headers take effect on export.
+	raw := []byte(`{
+		"apps": {
+			"http": {
+				"servers": {
+					"srv0": {
+						"listen": [":443"],
+						"routes": [
+							{
+								"match": [{"host": ["app.example.com"]}],
+								"handle": [{
+									"handler": "subroute",
+									"routes": [{
+										"handle": [{
+											"handler": "reverse_proxy",
+											"upstreams": [{"dial": "localhost:3000"}]
+										}]
+									}]
+								}],
+								"terminal": true
+							}
+						]
+					}
+				}
+			}
+		}
+	}`)
+
+	var cfg CaddyConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	routes, err := ParseCaddyConfig(&cfg)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	imported := routes[0]
+	if imported.HandlerType != "reverse_proxy" {
+		t.Fatalf("Expected reverse_proxy, got %s", imported.HandlerType)
+	}
+	// RawCaddyRoute should be cleared for fully-managed subroute
+	if len(imported.RawCaddyRoute) != 0 {
+		t.Error("Expected RawCaddyRoute to be cleared for trivial subroute (fully editable)")
+	}
+
+	// Simulate user editing upstreams
+	imported.Config = json.RawMessage(`{"upstreams":["localhost:9999"]}`)
+
+	// Export — should use normal buildRoute (not buildRouteMerged) since RawCaddyRoute is nil
+	exportedConfig := BuildCaddyConfig(routes, nil)
+	exportedJSON, _ := json.Marshal(exportedConfig)
+	var exportedCfg CaddyConfig
+	json.Unmarshal(exportedJSON, &exportedCfg)
+
+	server := exportedCfg.Apps.HTTP.Servers["srv0"]
+	exportedRoute := server.Routes[0]
+
+	// Should be a flat reverse_proxy handler (not subroute), with the edited upstream
+	if len(exportedRoute.Handle) != 1 {
+		t.Fatalf("Expected 1 handler, got %d", len(exportedRoute.Handle))
+	}
+	handlerType, _ := exportedRoute.Handle[0]["handler"].(string)
+	if handlerType != "reverse_proxy" {
+		t.Errorf("Expected flat reverse_proxy, got %s", handlerType)
+	}
+	upstreams, _ := exportedRoute.Handle[0]["upstreams"].([]any)
+	if len(upstreams) != 1 {
+		t.Fatalf("Expected 1 upstream, got %d", len(upstreams))
+	}
+	upstream, _ := upstreams[0].(map[string]any)
+	if dial, _ := upstream["dial"].(string); dial != "localhost:9999" {
+		t.Errorf("Expected edited upstream localhost:9999, got %s", dial)
+	}
+}
+
+func TestRoundTrip_SubrouteImport(t *testing.T) {
+	// Simulate importing a subroute-wrapped route with unmanaged middleware (crowdsec),
+	// then exporting it. The export should preserve the subroute structure, not duplicate handlers.
+	raw := []byte(`{
+		"apps": {
+			"http": {
+				"servers": {
+					"srv0": {
+						"listen": [":443"],
+						"routes": [
+							{
+								"match": [{"host": ["app.example.com"]}],
+								"handle": [{
+									"handler": "subroute",
+									"routes": [{
+										"handle": [
+											{"handler": "crowdsec"},
+											{
+												"handler": "reverse_proxy",
+												"upstreams": [{"dial": "localhost:3000"}]
+											}
+										]
+									}]
+								}],
+								"terminal": true
+							}
+						]
+					}
+				}
+			}
+		}
+	}`)
+
+	var cfg CaddyConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Import
+	routes, err := ParseCaddyConfig(&cfg)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("Expected 1 route, got %d", len(routes))
+	}
+
+	imported := routes[0]
+	if imported.HandlerType != "reverse_proxy" {
+		t.Fatalf("Expected reverse_proxy, got %s", imported.HandlerType)
+	}
+
+	// Export (rebuild)
+	exportedConfig := BuildCaddyConfig(routes, nil)
+
+	// Serialize and re-parse to verify clean round-trip
+	exportedJSON, err := json.Marshal(exportedConfig)
+	if err != nil {
+		t.Fatalf("Failed to marshal exported config: %v", err)
+	}
+
+	var exportedCfg CaddyConfig
+	if err := json.Unmarshal(exportedJSON, &exportedCfg); err != nil {
+		t.Fatalf("Failed to unmarshal exported config: %v", err)
+	}
+
+	server := exportedCfg.Apps.HTTP.Servers["srv0"]
+	if len(server.Routes) != 1 {
+		t.Fatalf("Expected 1 exported route, got %d", len(server.Routes))
+	}
+
+	exportedRoute := server.Routes[0]
+	// Should preserve the subroute handler, NOT add a duplicate reverse_proxy
+	if len(exportedRoute.Handle) != 1 {
+		t.Errorf("Expected 1 top-level handler (subroute), got %d (possible handler duplication)", len(exportedRoute.Handle))
+	}
+
+	handlerType, _ := exportedRoute.Handle[0]["handler"].(string)
+	if handlerType != "subroute" {
+		t.Errorf("Expected subroute handler preserved, got %s", handlerType)
+	}
+}

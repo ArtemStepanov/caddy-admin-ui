@@ -70,9 +70,13 @@ func parseRoute(r Route) (*storage.Route, error) {
 	// We look for known handlers: reverse_proxy, file_server, static_response (redir)
 	// We also look for headers and encode
 
+	// Collect all handlers, unwrapping subroutes so we can find the actual handlers
+	// Caddy wraps handlers in "subroute" when configured via Caddyfile
+	allHandlers := flattenHandlers(r.Handle)
+
 	var mainHandlerFound bool
 
-	for _, h := range r.Handle {
+	for _, h := range allHandlers {
 		handlerType, ok := h["handler"].(string)
 		if !ok {
 			continue
@@ -140,14 +144,177 @@ func parseRoute(r Route) (*storage.Route, error) {
 		}
 	}
 
-	if !mainHandlerFound {
-		// If we couldn't parse a known main handler, mark as unknown
+	if mainHandlerFound {
+		// If we successfully extracted all handlers via flatten, check whether
+		// the route can be fully rebuilt from our model (all handlers are managed).
+		// If so, clear RawCaddyRoute so the route goes through normal buildRoute
+		// (editable) instead of buildRouteMerged (read-only preservation).
+		if allHandlersManaged(allHandlers) {
+			storageRoute.RawCaddyRoute = nil
+		}
+	} else {
+		// Flattening didn't work (complex subroute). Do a deep search through
+		// the entire handler tree to at least identify the handler type for display.
 		// The original JSON is preserved in RawCaddyRoute, so it will be synced back as is.
-		storageRoute.HandlerType = "unknown"
+		if detected := detectDeepHandlerType(r.Handle); detected != "" {
+			// Normalize: Caddy uses "static_response" but our model uses "redir"
+			if detected == "static_response" {
+				detected = "redir"
+			}
+			storageRoute.HandlerType = detected
+		} else {
+			storageRoute.HandlerType = "unknown"
+		}
 		storageRoute.Config = json.RawMessage("{}")
 	}
 
 	return storageRoute, nil
+}
+
+// flattenHandlers unwraps simple subroute handlers to extract the actual handlers within.
+// Caddy wraps handlers in "subroute" when configured via Caddyfile.
+// Only unwraps subroutes whose inner routes have no matchers (simple wrappers).
+// Subroutes with nested matchers (e.g. from handle_path) are left as-is to avoid
+// losing routing semantics.
+func flattenHandlers(handlers []Handler) []Handler {
+	var result []Handler
+	for _, h := range handlers {
+		handlerType, _ := h["handler"].(string)
+		if handlerType == "subroute" {
+			if nested := extractSimpleSubrouteHandlers(h); nested != nil {
+				result = append(result, nested...)
+				continue
+			}
+		}
+		result = append(result, h)
+	}
+	return result
+}
+
+// extractSimpleSubrouteHandlers extracts handlers from a subroute only if it
+// contains exactly one inner route with no match conditions and no terminal flag.
+// This covers the common Caddyfile pattern where handlers are wrapped in a trivial
+// subroute. Returns nil for complex subroutes (multiple routes, matchers, terminal).
+//
+// Note: this is used for type DETECTION only. The original structure is preserved
+// in RawCaddyRoute. Unrecognized handlers (crowdsec, appsec, etc.) are extracted
+// here but simply ignored by the caller's switch statement.
+func extractSimpleSubrouteHandlers(h Handler) []Handler {
+	routes, ok := h["routes"].([]any)
+	if !ok || len(routes) != 1 {
+		return nil
+	}
+
+	routeMap, ok := routes[0].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	// If the inner route has matchers, this is a complex subroute — don't flatten
+	if match, hasMatch := routeMap["match"]; hasMatch {
+		if matchSlice, ok := match.([]any); ok && len(matchSlice) > 0 {
+			return nil
+		}
+	}
+
+	// If the inner route has terminal flag, don't flatten (route-level flow control)
+	if terminal, ok := routeMap["terminal"].(bool); ok && terminal {
+		return nil
+	}
+
+	nestedHandlers, ok := routeMap["handle"].([]any)
+	if !ok {
+		return nil
+	}
+
+	var result []Handler
+	for _, nh := range nestedHandlers {
+		if nhMap, ok := nh.(map[string]any); ok {
+			// Recursively flatten in case of nested subroutes
+			result = append(result, flattenHandlers([]Handler{nhMap})...)
+		}
+	}
+	return result
+}
+
+// allHandlersManaged returns true if every handler in the list is a type
+// we can fully represent and rebuild in our model.
+func allHandlersManaged(handlers []Handler) bool {
+	managed := map[string]bool{
+		"reverse_proxy":   true,
+		"file_server":     true,
+		"static_response": true,
+		"headers":         true,
+		"encode":          true,
+		"rewrite":         true,
+	}
+	for _, h := range handlers {
+		hType, _ := h["handler"].(string)
+		if !managed[hType] {
+			return false
+		}
+	}
+	return true
+}
+
+// detectDeepHandlerType recursively searches through all handlers (including
+// nested subroutes) to find a main handler type. Used as a fallback when
+// flattenHandlers can't extract handlers from complex subroute structures.
+// Prioritizes reverse_proxy and file_server over static_response, since
+// static_response is often used as auxiliary middleware (e.g. websocket blocking).
+func detectDeepHandlerType(handlers []Handler) string {
+	var found []string
+	collectDeepHandlerTypes(handlers, &found)
+
+	// Prefer reverse_proxy > file_server > static_response
+	for _, t := range found {
+		if t == "reverse_proxy" {
+			return t
+		}
+	}
+	for _, t := range found {
+		if t == "file_server" {
+			return t
+		}
+	}
+	for _, t := range found {
+		if t == "static_response" {
+			return t
+		}
+	}
+	return ""
+}
+
+func collectDeepHandlerTypes(handlers []Handler, found *[]string) {
+	mainTypes := map[string]bool{
+		"reverse_proxy":   true,
+		"file_server":     true,
+		"static_response": true,
+	}
+
+	for _, h := range handlers {
+		hType, _ := h["handler"].(string)
+		if mainTypes[hType] {
+			*found = append(*found, hType)
+		}
+		if hType == "subroute" {
+			if routes, ok := h["routes"].([]any); ok {
+				for _, r := range routes {
+					if routeMap, ok := r.(map[string]any); ok {
+						if nested, ok := routeMap["handle"].([]any); ok {
+							var nestedHandlers []Handler
+							for _, nh := range nested {
+								if nhMap, ok := nh.(map[string]any); ok {
+									nestedHandlers = append(nestedHandlers, nhMap)
+								}
+							}
+							collectDeepHandlerTypes(nestedHandlers, found)
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 func createRawRoute(r Route) *storage.Route {
