@@ -32,12 +32,18 @@ updates:
     groups:
       # Group all non-security updates together
       dependencies:
+        update-types:
+          - "minor"
+          - "patch"
         patterns:
           - "*"
         exclude-patterns:
           - "@types/*"
       # Separate group for TypeScript types
       types:
+        update-types:
+          - "minor"
+          - "patch"
         patterns:
           - "@types/*"
 
