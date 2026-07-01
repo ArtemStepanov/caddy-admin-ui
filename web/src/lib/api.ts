@@ -35,6 +35,7 @@ export interface StatusResponse {
   route_count?: number;
   last_synced_at?: string;
   last_sync_error?: string;
+  version?: string;
 }
 
 class ApiClient {

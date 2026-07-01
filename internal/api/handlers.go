@@ -12,6 +12,7 @@ import (
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/caddy"
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/config"
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/storage"
+	"github.com/ArtemStepanov/caddy-admin-ui/internal/version"
 )
 
 // validateCaddyURL checks that a URL is a valid http(s) origin (scheme + host + optional port).
@@ -277,6 +278,7 @@ func (h *Handler) GetStatus(c *gin.Context) {
 			"error":     err.Error(),
 			"latency":   latency,
 			"admin_url": caddyURL,
+			"version":   version.Version,
 		}
 		if !h.lastSyncedAt.IsZero() {
 			resp["last_synced_at"] = h.lastSyncedAt.Format(time.RFC3339)
@@ -298,6 +300,7 @@ func (h *Handler) GetStatus(c *gin.Context) {
 		"latency":     latency,
 		"admin_url":   caddyURL,
 		"route_count": routeCount,
+		"version":     version.Version,
 	}
 	if !h.lastSyncedAt.IsZero() {
 		resp["last_synced_at"] = h.lastSyncedAt.Format(time.RFC3339)

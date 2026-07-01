@@ -24,9 +24,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Build
+ARG VERSION=dev
 COPY cmd/ cmd/
 COPY internal/ internal/
-RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o caddy-admin-ui ./cmd/server
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w -X github.com/ArtemStepanov/caddy-admin-ui/internal/version.Version=${VERSION}" -o caddy-admin-ui ./cmd/server
 
 # Final image
 FROM alpine:3.24

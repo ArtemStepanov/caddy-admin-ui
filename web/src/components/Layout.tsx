@@ -75,6 +75,7 @@ export function Layout({ children }: LayoutProps) {
       {/* Footer */}
       <footer class="bg-slate-800 border-t border-slate-700 py-4 text-center text-sm text-slate-500">
         Caddy Admin UI
+        {statusData?.version && <span> · {statusData.version}</span>}
       </footer>
 
       <Toast />
