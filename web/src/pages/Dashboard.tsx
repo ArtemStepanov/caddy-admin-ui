@@ -116,10 +116,6 @@ export function Dashboard() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
-    loadRoutes();
-  }, []);
-
   async function loadRoutes() {
     try {
       const { routes } = await api.listRoutes();
@@ -130,6 +126,10 @@ export function Dashboard() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    loadRoutes();
+  }, []);
 
   async function handleToggle(id: string) {
     try {

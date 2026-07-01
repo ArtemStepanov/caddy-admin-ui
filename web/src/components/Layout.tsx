@@ -12,12 +12,6 @@ export function Layout({ children }: LayoutProps) {
   const [statusData, setStatusData] = useState<StatusResponse | null>(null);
   const [checking, setChecking] = useState(true);
 
-  useEffect(() => {
-    checkStatus();
-    const interval = setInterval(checkStatus, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
   async function checkStatus() {
     setChecking(true);
     try {
@@ -29,6 +23,12 @@ export function Layout({ children }: LayoutProps) {
       setChecking(false);
     }
   }
+
+  useEffect(() => {
+    checkStatus();
+    const interval = setInterval(checkStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const status = checking && !statusData ? 'loading' : (statusData?.status || 'offline');
 
