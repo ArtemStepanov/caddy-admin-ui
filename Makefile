@@ -41,7 +41,7 @@ logs:
 
 # Run tests
 test:
-	CGO_ENABLED=1 go test ./...
+	CGO_ENABLED=1 go test $$(go list ./... | grep -v '/web/node_modules/')
 	cd web && npm test -- run
 
 # Clean build artifacts
