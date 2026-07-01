@@ -15,10 +15,6 @@ export function Settings() {
     enable_encode: true,
   });
 
-  useEffect(() => {
-    loadConfig();
-  }, []);
-
   async function loadConfig() {
     try {
       const { config: cfg } = await api.getConfig();
@@ -29,6 +25,10 @@ export function Settings() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    loadConfig();
+  }, []);
 
   async function handleSubmit(e: Event) {
     e.preventDefault();

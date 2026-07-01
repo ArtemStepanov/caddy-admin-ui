@@ -28,12 +28,6 @@ export function RouteForm({ id }: RouteFormProps) {
   const [showHeaders, setShowHeaders] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
 
-  useEffect(() => {
-    if (isEdit) {
-      loadRoute();
-    }
-  }, [id]);
-
   async function loadRoute() {
     try {
       const { route } = await api.getRoute(id!);
@@ -52,6 +46,12 @@ export function RouteForm({ id }: RouteFormProps) {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (isEdit) {
+      loadRoute();
+    }
+  }, [id]);
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
