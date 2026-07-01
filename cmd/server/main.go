@@ -10,6 +10,7 @@ import (
 
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/api"
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/storage"
+	"github.com/ArtemStepanov/caddy-admin-ui/internal/version"
 )
 
 func main() {
@@ -20,7 +21,7 @@ func main() {
 	adminUser := os.Getenv("ADMIN_USER")
 	adminPassword := os.Getenv("ADMIN_PASSWORD")
 
-	log.Printf("Starting Caddy Orchestrator Lite")
+	log.Printf("Starting Caddy Orchestrator Lite %s", version.Version)
 	log.Printf("  Database: %s", dbPath)
 	log.Printf("  Default Caddy Admin URL: %s", caddyURL)
 	log.Printf("  Listen Address: %s", listenAddr)

@@ -1,11 +1,14 @@
 .PHONY: all build run dev docker clean test docker-up-build
 
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -X github.com/ArtemStepanov/caddy-admin-ui/internal/version.Version=$(VERSION)
+
 # Build all
 all: build
 
 # Build backend
 build:
-	CGO_ENABLED=1 go build -o bin/caddy-admin-ui ./cmd/server
+	CGO_ENABLED=1 go build -ldflags "$(LDFLAGS)" -o bin/caddy-admin-ui ./cmd/server
 
 # Build frontend
 frontend:
@@ -21,7 +24,7 @@ dev-frontend:
 
 # Build Docker image
 docker:
-	docker build -t caddy-admin-ui .
+	docker build --build-arg VERSION=$(VERSION) -t caddy-admin-ui .
 
 # Run with Docker Compose
 docker-up:

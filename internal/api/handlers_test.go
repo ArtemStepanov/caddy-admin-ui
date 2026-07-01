@@ -489,6 +489,11 @@ func TestGetStatus(t *testing.T) {
 	if response["latency"] == nil {
 		t.Error("Expected latency in response")
 	}
+
+	// Should report the application version
+	if response["version"] != "dev" {
+		t.Errorf("Expected version dev, got %v", response["version"])
+	}
 }
 
 func TestSyncToCaddy(t *testing.T) {
