@@ -23,7 +23,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@vitest/coverage-v8": "^4.1.8",
     "autoprefixer": "^10.4.17",
-    "eslint": "^9.0.0",
+    "eslint": "^10.6.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "happy-dom": "^20.8.9",
     "postcss": "^8.5.15",
