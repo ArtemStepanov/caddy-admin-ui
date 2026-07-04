@@ -43,9 +43,12 @@ Each group row uses this shape:
   "destination": "http://app:8080",
   "support_status": "editable",
   "readonly_reason": "",
+  "raw_caddy_route": {},
   "change_type": "new"
 }
 ```
+
+`raw_caddy_route` is present only for read-only preview rows so the user can validate the exact unsupported handler before confirming import. It is exposed through the existing admin UI/API surface only; editable rows omit it.
 
 ### Error Responses
 

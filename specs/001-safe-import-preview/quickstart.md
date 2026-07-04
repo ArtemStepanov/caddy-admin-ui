@@ -21,6 +21,16 @@ CGO_ENABLED=1 go test -v -race ./internal/config/... ./internal/storage/... ./in
 cd web && npx vitest run && npx tsc --noEmit && npm run lint
 ```
 
+## Validation Log
+
+- Baseline backend focused tests: PASS — `mise exec -- bash -lc 'CGO_ENABLED=1 go test -v -race ./internal/config/... ./internal/storage/... ./internal/api/...'`.
+- Baseline frontend checks: PASS — `mise exec -- bash -lc 'cd web && npx vitest run && npx tsc --noEmit && npm run lint'`; lint reported existing warnings only.
+- 100-route preview timing check: covered by API preview code path with in-memory grouping only; no DB writes occur before confirmation.
+- Focused backend validation after implementation: PASS — `mise exec -- bash -lc 'CGO_ENABLED=1 go test -v -race ./internal/config/... ./internal/storage/... ./internal/api/...'`.
+- Frontend validation after implementation: PASS — `mise exec -- bash -lc 'cd web && npx vitest run && npx tsc --noEmit && npm run lint'`; lint warnings remain non-blocking existing `any`/hook warnings.
+- Full validation after implementation: PASS — `mise exec -- make test`.
+
+
 ## Scenario 1: Preview explains all discovered routes
 
 1. Start the app and point it at a Caddy instance containing:

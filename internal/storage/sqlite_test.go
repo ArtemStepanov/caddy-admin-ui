@@ -215,36 +215,6 @@ func TestDeleteRoute(t *testing.T) {
 	}
 }
 
-func TestDeleteAllRoutes(t *testing.T) {
-	storage, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	// Create multiple routes
-	for i := 0; i < 3; i++ {
-		route := &Route{
-			Domain:      "example.com",
-			HandlerType: "reverse_proxy",
-			Config:      json.RawMessage(`{}`),
-		}
-		storage.CreateRoute(route)
-	}
-
-	routes, _ := storage.ListRoutes()
-	if len(routes) != 3 {
-		t.Fatalf("Expected 3 routes, got %d", len(routes))
-	}
-
-	err := storage.DeleteAllRoutes()
-	if err != nil {
-		t.Fatalf("Failed to delete all routes: %v", err)
-	}
-
-	routes, _ = storage.ListRoutes()
-	if len(routes) != 0 {
-		t.Errorf("Expected 0 routes after deletion, got %d", len(routes))
-	}
-}
-
 func TestGlobalConfig_Defaults(t *testing.T) {
 	storage, cleanup := setupTestDB(t)
 	defer cleanup()
@@ -254,8 +224,8 @@ func TestGlobalConfig_Defaults(t *testing.T) {
 		t.Fatalf("Failed to get global config: %v", err)
 	}
 
-	if cfg.CaddyAdminURL != "http://localhost:2019" {
-		t.Errorf("Expected default CaddyAdminURL, got %s", cfg.CaddyAdminURL)
+	if cfg.CaddyAdminURL != "" {
+		t.Errorf("Expected storage CaddyAdminURL to defer to API default, got %s", cfg.CaddyAdminURL)
 	}
 	if !cfg.EnableEncode {
 		t.Error("Expected EnableEncode to be true by default")
@@ -286,6 +256,55 @@ func TestGlobalConfig_SetAndGet(t *testing.T) {
 	}
 	if retrieved.EnableEncode {
 		t.Error("Expected EnableEncode to be false")
+	}
+}
+
+func TestRouteMetadataPersists(t *testing.T) {
+	storage, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	route := &Route{
+		Domain:         "example.com",
+		HandlerType:    "unknown",
+		Config:         json.RawMessage(`{}`),
+		Enabled:        true,
+		SupportStatus:  SupportStatusUnsupportedReadOnly,
+		ReadOnlyReason: "unknown handler",
+		RawCaddyRoute:  json.RawMessage(`{"handle":[{"handler":"custom"}]}`),
+	}
+	if err := storage.CreateRoute(route); err != nil {
+		t.Fatal(err)
+	}
+	got, err := storage.GetRoute(route.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.ReadOnly || got.SupportStatus != SupportStatusUnsupportedReadOnly || got.ReadOnlyReason != "unknown handler" || len(got.RawCaddyRoute) == 0 {
+		t.Fatalf("metadata not persisted: %+v raw=%s", got, got.RawCaddyRoute)
+	}
+}
+
+func TestReplaceAllRoutesRollsBackOnInsertFailure(t *testing.T) {
+	storage, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	original := &Route{Domain: "keep.example.com", HandlerType: "reverse_proxy", Config: json.RawMessage(`{}`), Enabled: true}
+	if err := storage.CreateRoute(original); err != nil {
+		t.Fatal(err)
+	}
+	routes := []*Route{
+		{ID: "dup", Domain: "one.example.com", HandlerType: "reverse_proxy", Config: json.RawMessage(`{}`), Enabled: true},
+		{ID: "dup", Domain: "two.example.com", HandlerType: "reverse_proxy", Config: json.RawMessage(`{}`), Enabled: true},
+	}
+	if err := storage.ReplaceAllRoutes(routes); err == nil {
+		t.Fatal("expected duplicate id error")
+	}
+	got, err := storage.ListRoutes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != original.ID {
+		t.Fatalf("replace was not rolled back: %+v", got)
 	}
 }
 

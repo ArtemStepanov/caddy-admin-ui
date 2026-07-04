@@ -18,9 +18,9 @@
 
 **Purpose**: Confirm the existing project state and avoid adding unnecessary stack changes.
 
-- [ ] T001 Run current backend import/parser/storage tests and record baseline command result in specs/001-safe-import-preview/quickstart.md
-- [ ] T002 Run current frontend type/test checks and record baseline command result in specs/001-safe-import-preview/quickstart.md
-- [ ] T003 [P] Review existing import endpoints and note current response gaps in specs/001-safe-import-preview/research.md
+- [X] T001 Run current backend import/parser/storage tests and record baseline command result in specs/001-safe-import-preview/quickstart.md
+- [X] T002 Run current frontend type/test checks and record baseline command result in specs/001-safe-import-preview/quickstart.md
+- [X] T003 [P] Review existing import endpoints and note current response gaps in specs/001-safe-import-preview/research.md
 
 ---
 
@@ -32,24 +32,24 @@
 
 ### Tests for Foundation
 
-- [ ] T004 Add storage tests for support_status, readonly_reason, and raw route persistence in internal/storage/sqlite_test.go
-- [ ] T005 Add storage transaction test proving route replacement rolls back on insert failure in internal/storage/sqlite_test.go
-- [ ] T006 [P] Add parser tests for editable, partial_readonly, unsupported_readonly, and readonly_reason classification in internal/config/parser_test.go
-- [ ] T007 [P] Add builder test proving a read-only raw Caddy route is validated and emitted unchanged on sync in internal/config/builder_test.go
-- [ ] T008 Add API tests for import validation errors and secret-safe error responses in internal/api/handlers_test.go
-- [ ] T009 Add API preview failure tests for Caddy fetch failure, parse failure, zero HTTP routes, and unchanged local state in internal/api/handlers_test.go
+- [X] T004 Add storage tests for support_status, readonly_reason, and raw route persistence in internal/storage/sqlite_test.go
+- [X] T005 Add storage transaction test proving route replacement rolls back on insert failure in internal/storage/sqlite_test.go
+- [X] T006 [P] Add parser tests for editable, partial_readonly, unsupported_readonly, and readonly_reason classification in internal/config/parser_test.go
+- [X] T007 [P] Add builder test proving a read-only raw Caddy route is validated and emitted unchanged on sync in internal/config/builder_test.go
+- [X] T008 Add API tests for import validation errors and secret-safe error responses in internal/api/handlers_test.go
+- [X] T009 Add API preview failure tests for Caddy fetch failure, parse failure, zero HTTP routes, and unchanged local state in internal/api/handlers_test.go
 
 ### Implementation for Foundation
 
-- [ ] T010 Add SupportStatus and ReadOnlyReason fields to Route in internal/storage/models.go
-- [ ] T011 Add SQLite migrations and scan/write support for support_status and readonly_reason in internal/storage/sqlite.go
-- [ ] T012 Implement transactional ReplaceAllRoutes(routes []*Route) in internal/storage/sqlite.go
-- [ ] T013 Add route classification constants/helpers in internal/config/parser.go
-- [ ] T014 Update ParseCaddyConfig classification and reason assignment in internal/config/parser.go
-- [ ] T015 Change buildRoute to validate and return preserved raw routes unchanged for read-only routes in internal/config/builder.go
-- [ ] T016 Update frontend Route and import preview TypeScript types in web/src/lib/api.ts
-- [ ] T017 Add import route validation helper and secret-safe error formatting in internal/api/handlers.go
-- [ ] T018 Apply import validation to PreviewImport and ImportFromCaddy before response or storage writes in internal/api/handlers.go
+- [X] T010 Add SupportStatus and ReadOnlyReason fields to Route in internal/storage/models.go
+- [X] T011 Add SQLite migrations and scan/write support for support_status and readonly_reason in internal/storage/sqlite.go
+- [X] T012 Implement transactional ReplaceAllRoutes(routes []*Route) in internal/storage/sqlite.go
+- [X] T013 Add route classification constants/helpers in internal/config/parser.go
+- [X] T014 Update ParseCaddyConfig classification and reason assignment in internal/config/parser.go
+- [X] T015 Change buildRoute to validate and return preserved raw routes unchanged for read-only routes in internal/config/builder.go
+- [X] T016 Update frontend Route and import preview TypeScript types in web/src/lib/api.ts
+- [X] T017 Add import route validation helper and secret-safe error formatting in internal/api/handlers.go
+- [X] T018 Apply import validation to PreviewImport and ImportFromCaddy before response or storage writes in internal/api/handlers.go
 
 **Checkpoint**: Foundation ready - user story implementation can now begin.
 
@@ -63,16 +63,16 @@
 
 ### Tests for User Story 1
 
-- [ ] T019 [P] [US1] Add API preview contract test for summary counts, groups, support status, and no storage mutation in internal/api/handlers_test.go
-- [ ] T020 [P] [US1] Add frontend import preview rendering test for counts, groups, and read-only reasons in web/src/pages/Settings.test.tsx
+- [X] T019 [P] [US1] Add API preview contract test for summary counts, groups, support status, and no storage mutation in internal/api/handlers_test.go
+- [X] T020 [P] [US1] Add frontend import preview rendering test for counts, groups, and read-only reasons in web/src/pages/Settings.test.tsx
 
 ### Implementation for User Story 1
 
-- [ ] T021 [US1] Add import preview summary/group response structs and route row summary helpers in internal/api/handlers.go
-- [ ] T022 [US1] Update PreviewImport to return summary, grouped rows, reasons, local-only removals, and warnings in internal/api/handlers.go
-- [ ] T023 [US1] Update previewImport client return types in web/src/lib/api.ts
-- [ ] T024 [US1] Replace confirm-only import prompt with an inline import review section in web/src/pages/Settings.tsx
-- [ ] T025 [US1] Render preview summary cards and grouped route rows in web/src/pages/Settings.tsx
+- [X] T021 [US1] Add import preview summary/group response structs and route row summary helpers in internal/api/handlers.go
+- [X] T022 [US1] Update PreviewImport to return summary, grouped rows, reasons, local-only removals, and warnings in internal/api/handlers.go
+- [X] T023 [US1] Update previewImport client return types in web/src/lib/api.ts
+- [X] T024 [US1] Replace confirm-only import prompt with an inline import review section in web/src/pages/Settings.tsx
+- [X] T025 [US1] Render preview summary cards and grouped route rows in web/src/pages/Settings.tsx
 
 **Checkpoint**: User Story 1 is fully functional and testable independently.
 
@@ -86,16 +86,16 @@
 
 ### Tests for User Story 2
 
-- [ ] T026 [US2] Add API import success test for editable/read-only counts and saved classifications in internal/api/handlers_test.go
-- [ ] T027 [US2] Add API import failure test proving previous local routes remain unchanged in internal/api/handlers_test.go
-- [ ] T028 [P] [US2] Add frontend import confirmation result test for imported counts and warnings in web/src/pages/Settings.test.tsx
+- [X] T026 [US2] Add API import success test for editable/read-only counts and saved classifications in internal/api/handlers_test.go
+- [X] T027 [US2] Add API import failure test proving previous local routes remain unchanged in internal/api/handlers_test.go
+- [X] T028 [P] [US2] Add frontend import confirmation result test for imported counts and warnings in web/src/pages/Settings.test.tsx
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Update ImportFromCaddy to use ReplaceAllRoutes and return editable/read-only/unsupported counts in internal/api/handlers.go
-- [ ] T030 [US2] Remove delete-then-create partial import behavior from ImportFromCaddy in internal/api/handlers.go
-- [ ] T031 [US2] Update importFromCaddy client return type in web/src/lib/api.ts
-- [ ] T032 [US2] Add confirm import action and success/error state for preview results in web/src/pages/Settings.tsx
+- [X] T029 [US2] Update ImportFromCaddy to use ReplaceAllRoutes and return editable/read-only/unsupported counts in internal/api/handlers.go
+- [X] T030 [US2] Remove delete-then-create partial import behavior from ImportFromCaddy in internal/api/handlers.go
+- [X] T031 [US2] Update importFromCaddy client return type in web/src/lib/api.ts
+- [X] T032 [US2] Add confirm import action and success/error state for preview results in web/src/pages/Settings.tsx
 
 **Checkpoint**: User Story 2 works independently and preserves previous state on failure.
 
@@ -109,21 +109,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T033 [US3] Add API mutation rejection tests for update, delete, and toggle of read-only routes in internal/api/handlers_test.go
-- [ ] T033a [US3] Add API sync failure warning test proving persisted routes remain and recovery guidance is returned in internal/api/handlers_test.go
-- [ ] T034 [US3] Add API details endpoint test for preserved raw route JSON in internal/api/handlers_test.go
-- [ ] T035 [P] [US3] Add dashboard test proving read-only route cards hide edit/delete/toggle and show View JSON/Details in web/src/pages/Dashboard.test.tsx
+- [X] T033 [US3] Add API mutation rejection tests for update, delete, and toggle of read-only routes in internal/api/handlers_test.go
+- [X] T033a [US3] Add API sync failure warning test proving persisted routes remain and recovery guidance is returned in internal/api/handlers_test.go
+- [X] T034 [US3] Add API details endpoint test for preserved raw route JSON in internal/api/handlers_test.go
+- [X] T035 [P] [US3] Add dashboard test proving read-only route cards hide edit/delete/toggle and show View JSON/Details in web/src/pages/Dashboard.test.tsx
 
 ### Implementation for User Story 3
 
-- [ ] T036 [US3] Reject update/delete/toggle for read-only routes with 409 Conflict in internal/api/handlers.go
-- [ ] T036a [US3] Ensure sync failure responses include warning status and recovery guidance without deleting persisted routes in internal/api/handlers.go
-- [ ] T037 [US3] Add GET /api/routes/:id/details route wiring under the existing /api route group in internal/api/routes.go
-- [ ] T038 [US3] Implement read-only route details handler returning raw_caddy_route in internal/api/handlers.go
-- [ ] T039 [US3] Add getRouteDetails client method and response types in web/src/lib/api.ts
-- [ ] T040 [US3] Update dashboard route cards to show Unsupported/managed outside UI label and hide mutation controls in web/src/pages/Dashboard.tsx
-- [ ] T041 [US3] Add read-only Details/View JSON display on the dashboard in web/src/pages/Dashboard.tsx
-- [ ] T042 [US3] Block direct edit form access for read-only routes with details-only copy in web/src/pages/RouteForm.tsx
+- [X] T036 [US3] Reject update/delete/toggle for read-only routes with 409 Conflict in internal/api/handlers.go
+- [X] T036a [US3] Ensure sync failure responses include warning status and recovery guidance without deleting persisted routes in internal/api/handlers.go
+- [X] T037 [US3] Add GET /api/routes/:id/details route wiring under the existing /api route group in internal/api/routes.go
+- [X] T038 [US3] Implement read-only route details handler returning raw_caddy_route in internal/api/handlers.go
+- [X] T039 [US3] Add getRouteDetails client method and response types in web/src/lib/api.ts
+- [X] T040 [US3] Update dashboard route cards to show Unsupported/managed outside UI label and hide mutation controls in web/src/pages/Dashboard.tsx
+- [X] T041 [US3] Add read-only Details/View JSON display on the dashboard in web/src/pages/Dashboard.tsx
+- [X] T042 [US3] Block direct edit form access for read-only routes with details-only copy in web/src/pages/RouteForm.tsx
 
 **Checkpoint**: User Story 3 works independently and read-only routes are truly non-mutating.
 
@@ -137,13 +137,13 @@
 
 ### Tests for User Story 4
 
-- [ ] T043 [P] [US4] Add frontend settings drift warning test in web/src/pages/Settings.test.tsx
-- [ ] T044 [P] [US4] Add frontend dashboard drift warning test in web/src/pages/Dashboard.test.tsx
+- [X] T043 [P] [US4] Add frontend settings drift warning test in web/src/pages/Settings.test.tsx
+- [X] T044 [P] [US4] Add frontend dashboard drift warning test in web/src/pages/Dashboard.test.tsx
 
 ### Implementation for User Story 4
 
-- [ ] T045 [US4] Add manual drift warning copy to Configuration Import section in web/src/pages/Settings.tsx
-- [ ] T046 [US4] Add manual drift warning copy near Sync to Caddy controls in web/src/pages/Dashboard.tsx
+- [X] T045 [US4] Add manual drift warning copy to Configuration Import section in web/src/pages/Settings.tsx
+- [X] T046 [US4] Add manual drift warning copy near Sync to Caddy controls in web/src/pages/Dashboard.tsx
 
 **Checkpoint**: User Story 4 works independently.
 
@@ -153,12 +153,12 @@
 
 **Purpose**: Final validation, cleanup, and docs aligned with the safety promise.
 
-- [ ] T047 [P] Update README supported/unsupported import behavior and read-only route documentation in README.md
-- [ ] T048 [P] Update quickstart validation results and manual test notes in specs/001-safe-import-preview/quickstart.md
-- [ ] T049 Add or document a 100-route import preview timing check in internal/api/handlers_test.go or specs/001-safe-import-preview/quickstart.md
-- [ ] T050 Run focused backend test suite and fix regressions in internal/config/parser_test.go, internal/config/builder_test.go, internal/storage/sqlite_test.go, and internal/api/handlers_test.go
-- [ ] T051 Run frontend tests, type-check, and lint; fix regressions in web/src/pages/Settings.tsx, web/src/pages/Dashboard.tsx, web/src/pages/RouteForm.tsx, and web/src/lib/api.ts
-- [ ] T052 Run full make test and record final validation command result in specs/001-safe-import-preview/quickstart.md
+- [X] T047 [P] Update README supported/unsupported import behavior and read-only route documentation in README.md
+- [X] T048 [P] Update quickstart validation results and manual test notes in specs/001-safe-import-preview/quickstart.md
+- [X] T049 Add or document a 100-route import preview timing check in internal/api/handlers_test.go or specs/001-safe-import-preview/quickstart.md
+- [X] T050 Run focused backend test suite and fix regressions in internal/config/parser_test.go, internal/config/builder_test.go, internal/storage/sqlite_test.go, and internal/api/handlers_test.go
+- [X] T051 Run frontend tests, type-check, and lint; fix regressions in web/src/pages/Settings.tsx, web/src/pages/Dashboard.tsx, web/src/pages/RouteForm.tsx, and web/src/lib/api.ts
+- [X] T052 Run full make test and record final validation command result in specs/001-safe-import-preview/quickstart.md
 
 ---
 
@@ -230,3 +230,12 @@ Task: "T035 [US3] Add dashboard read-only actions test in web/src/pages/Dashboar
 ### Lazy Scope Guard
 
 No new dependencies, no raw JSON editor, no per-route import checkboxes, no drift detection, no Layer4 editing, and no broad import-session abstraction unless a later spec requires it.
+
+---
+
+## Phase 8: Convergence
+
+- [X] T053 CRITICAL: Make sync/build validation fail with recovery guidance instead of silently omitting invalid read-only raw routes per FR-013 and Constitution I (partial)
+- [X] T054 CRITICAL: Add handler-specific import and sync validation so invalid editable route configs are rejected or preserved read-only instead of later being dropped per FR-016 and Constitution II (partial)
+- [X] T055 Implement preview row fallback summaries for routes without host/domain using path, destination/root, or an unknown placeholder per FR-004 (partial)
+- [X] T056 Review, document, or remove raw_caddy_route exposure in import-preview rows so it matches the import-flow contract and FR-016 secret-handling expectations per Contract: import preview row (unrequested)

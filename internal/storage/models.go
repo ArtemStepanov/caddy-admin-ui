@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+const (
+	SupportStatusEditable            = "editable"
+	SupportStatusPartialReadOnly     = "partial_readonly"
+	SupportStatusUnsupportedReadOnly = "unsupported_readonly"
+)
+
 // Route represents a single route configuration
 type Route struct {
 	ID              string          `json:"id"`
@@ -15,13 +21,12 @@ type Route struct {
 	Headers         *HeaderConfig   `json:"headers,omitempty"`
 	StripPathPrefix string          `json:"strip_path_prefix,omitempty"`
 	Enabled         bool            `json:"enabled"`
+	SupportStatus   string          `json:"support_status,omitempty"`
+	ReadOnlyReason  string          `json:"readonly_reason,omitempty"`
 	CreatedAt       time.Time       `json:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
 
-	// ReadOnly indicates that this route contains handlers we can't fully represent
-	// (e.g. subroutes with unmanaged middleware). The route type is detected for display,
-	// but handler-level edits (upstreams, headers, etc.) won't take effect on export.
-	// Domain/path edits and enable/disable still work.
+	// ReadOnly routes are preserved but not mutated by the UI/API.
 	ReadOnly bool `json:"readonly,omitempty"`
 
 	// RawCaddyRoute stores the original Caddy route JSON for preserving

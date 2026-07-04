@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -73,6 +74,50 @@ var managedHandlerTypes = map[string]bool{
 	"rewrite":         true,
 }
 
+// ValidateRoutesForBuild rejects routes that would otherwise be silently dropped while building Caddy config.
+func ValidateRoutesForBuild(routes []*storage.Route) error {
+	for _, route := range routes {
+		if route == nil || !route.Enabled {
+			continue
+		}
+		if route.Domain == "" || route.HandlerType == "" {
+			return fmt.Errorf("route %q is missing domain or handler type", route.ID)
+		}
+		readOnly := route.ReadOnly || route.SupportStatus != "" && route.SupportStatus != storage.SupportStatusEditable
+		if readOnly {
+			if len(route.RawCaddyRoute) == 0 || route.ReadOnlyReason == "" {
+				return fmt.Errorf("read-only route %q is missing preserved raw config or reason", route.ID)
+			}
+			var original Route
+			if err := json.Unmarshal(route.RawCaddyRoute, &original); err != nil || len(original.Handle) == 0 {
+				return fmt.Errorf("read-only route %q has invalid preserved raw config", route.ID)
+			}
+			continue
+		}
+
+		switch route.HandlerType {
+		case "reverse_proxy":
+			var cfg storage.ReverseProxyConfig
+			if err := json.Unmarshal(route.Config, &cfg); err != nil || len(cfg.Upstreams) == 0 {
+				return fmt.Errorf("route %q has invalid reverse_proxy config", route.ID)
+			}
+		case "file_server":
+			var cfg storage.FileServerConfig
+			if err := json.Unmarshal(route.Config, &cfg); err != nil {
+				return fmt.Errorf("route %q has invalid file_server config", route.ID)
+			}
+		case "redir":
+			var cfg storage.RedirectConfig
+			if err := json.Unmarshal(route.Config, &cfg); err != nil || cfg.To == "" {
+				return fmt.Errorf("route %q has invalid redir config", route.ID)
+			}
+		default:
+			return fmt.Errorf("route %q has unsupported editable handler type %q", route.ID, route.HandlerType)
+		}
+	}
+	return nil
+}
+
 // BuildCaddyConfig converts stored routes to Caddy JSON config
 func BuildCaddyConfig(routes []*storage.Route, global *storage.GlobalConfig) *CaddyConfig {
 	// Always preserve admin listener on 0.0.0.0:2019 so we can continue managing Caddy
@@ -131,7 +176,15 @@ func BuildCaddyConfig(routes []*storage.Route, global *storage.GlobalConfig) *Ca
 
 // buildRoute converts a single stored route to a Caddy route
 func buildRoute(r *storage.Route, global *storage.GlobalConfig) *Route {
-	// If we have preserved raw Caddy route, use it as base
+	// Read-only means hands off: emit the original Caddy route unchanged.
+	if len(r.RawCaddyRoute) > 0 && (r.ReadOnly || r.SupportStatus != "" && r.SupportStatus != storage.SupportStatusEditable) {
+		var original Route
+		if err := json.Unmarshal(r.RawCaddyRoute, &original); err != nil || len(original.Handle) == 0 {
+			return nil
+		}
+		return &original
+	}
+	// Legacy raw routes that are not marked read-only keep old merge behavior.
 	if len(r.RawCaddyRoute) > 0 {
 		return buildRouteMerged(r, global)
 	}

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
-import { api, Route } from '../lib/api';
+import { api, Route, RouteDetails } from '../lib/api';
+
+const DRIFT_WARNING = 'Manual Caddy changes after the last import or sync are not automatically merged. Re-run import review before syncing after manual edits.';
 import { notifySyncResult } from '../lib/syncNotify';
 
 const HANDLER_ICONS: Record<string, string> = {
@@ -14,21 +16,22 @@ const HANDLER_LABELS: Record<string, string> = {
   redir: 'Redirect',
 };
 
-function RouteCard({ route, onToggle, onDelete }: { 
-  route: Route; 
+function RouteCard({ route, onToggle, onDelete, onDetails }: {
+  route: Route;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
+  onDetails: (id: string) => void;
 }) {
   const getConfigSummary = () => {
     try {
-      const config = typeof route.config === 'string' 
-        ? JSON.parse(route.config) 
+      const config = typeof route.config === 'string'
+        ? JSON.parse(route.config)
         : route.config;
-      
+
       switch (route.handler_type) {
         case 'reverse_proxy':
           const upstreams = config.upstreams || [];
-          return upstreams.length > 0 
+          return upstreams.length > 0
             ? `→ ${upstreams[0]}${upstreams.length > 1 ? ` (+${upstreams.length - 1})` : ''}`
             : 'No upstreams';
         case 'file_server':
@@ -62,14 +65,14 @@ function RouteCard({ route, onToggle, onDelete }: {
               </span>
             )}
           </div>
-          
+
           <div class="flex items-center gap-2 text-sm text-slate-400 mb-2">
             <span class="bg-slate-700 px-2 py-0.5 rounded">
               {HANDLER_LABELS[route.handler_type] || route.handler_type}
             </span>
             {route.readonly && (
-              <span class="bg-amber-600/30 text-amber-300 text-xs px-1.5 py-0.5 rounded" title="Imported route with unmanaged middleware. Handler config is read-only.">
-                imported
+              <span class="bg-amber-600/30 text-amber-300 text-xs px-1.5 py-0.5 rounded" title={route.readonly_reason || 'Managed outside UI'}>
+                Unsupported / managed outside UI
               </span>
             )}
             <span class="truncate">{getConfigSummary()}</span>
@@ -81,27 +84,35 @@ function RouteCard({ route, onToggle, onDelete }: {
         </div>
 
         <div class="flex items-center gap-2">
-          <button
-            onClick={() => onToggle(route.id)}
-            class={`w-12 h-6 rounded-full relative transition-colors ${
-              route.enabled ? 'bg-green-600' : 'bg-slate-600'
-            }`}
-            title={route.enabled ? 'Disable route' : 'Enable route'}
-          >
-            <span
-              class={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                route.enabled ? 'left-7' : 'left-1'
-              }`}
-            />
-          </button>
+          {route.readonly ? (
+            <button onClick={() => onDetails(route.id)} class="btn btn-secondary text-sm">
+              View JSON
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => onToggle(route.id)}
+                class={`w-12 h-6 rounded-full relative transition-colors ${
+                  route.enabled ? 'bg-green-600' : 'bg-slate-600'
+                }`}
+                title={route.enabled ? 'Disable route' : 'Enable route'}
+              >
+                <span
+                  class={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    route.enabled ? 'left-7' : 'left-1'
+                  }`}
+                />
+              </button>
 
-          <a href={`/routes/${route.id}`} class="btn btn-secondary text-sm">
-            Edit
-          </a>
+              <a href={`/routes/${route.id}`} class="btn btn-secondary text-sm">
+                Edit
+              </a>
 
-          <button onClick={() => onDelete(route.id)} class="btn btn-danger text-sm">
-            Delete
-          </button>
+              <button onClick={() => onDelete(route.id)} class="btn btn-danger text-sm">
+                Delete
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -115,6 +126,7 @@ export function Dashboard() {
   const [filter, setFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [syncing, setSyncing] = useState(false);
+  const [details, setDetails] = useState<RouteDetails | null>(null);
 
   async function loadRoutes() {
     try {
@@ -146,6 +158,14 @@ export function Dashboard() {
     try {
       await api.deleteRoute(id);
       setRoutes(routes.filter((r) => r.id !== id));
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function handleDetails(id: string) {
+    try {
+      setDetails(await api.getRouteDetails(id));
     } catch (err: any) {
       setError(err.message);
     }
@@ -190,6 +210,7 @@ export function Dashboard() {
           <p class="text-slate-400">
             {routes.length} route{routes.length !== 1 ? 's' : ''} configured
           </p>
+          <p class="text-amber-300 text-sm mt-1">{DRIFT_WARNING}</p>
         </div>
 
         <div class="flex items-center gap-3">
@@ -208,6 +229,16 @@ export function Dashboard() {
           <button onClick={() => setError(null)} class="float-right text-red-400 hover:text-red-300">
             ×
           </button>
+        </div>
+      )}
+
+      {details && (
+        <div class="bg-slate-900 border border-slate-700 rounded-lg p-4 mb-6">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-semibold">Route JSON: {details.route.domain}</h2>
+            <button onClick={() => setDetails(null)} class="text-slate-400 hover:text-slate-200">×</button>
+          </div>
+          <pre class="text-xs overflow-auto bg-black/30 rounded p-3">{JSON.stringify(details.raw_caddy_route, null, 2)}</pre>
         </div>
       )}
 
@@ -278,6 +309,7 @@ export function Dashboard() {
                     route={route}
                     onToggle={handleToggle}
                     onDelete={handleDelete}
+                    onDetails={handleDetails}
                   />
                 ))}
               </div>
@@ -295,6 +327,7 @@ export function Dashboard() {
                       route={route}
                       onToggle={handleToggle}
                       onDelete={handleDelete}
+                      onDetails={handleDetails}
                     />
                   ))}
                 </div>

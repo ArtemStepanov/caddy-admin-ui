@@ -1,5 +1,12 @@
 # Research: Safe Import Preview
 
+## Existing import endpoint gaps reviewed during implementation
+
+- `POST /api/import-preview` returned only raw route list/count, with no summary, grouping, support status counts, read-only reasons, warnings, or local-only removal visibility.
+- `POST /api/import` deleted all routes before inserting imported routes, so insert failures could leave partial or empty local state.
+- Preserved raw routes could still be edited, deleted, toggled, or matcher-mutated through API/UI paths.
+- Import errors included low-level Caddy response details; import endpoints now return secret-safe failure summaries.
+
 ## Decision: Keep the current parser/import architecture and harden it
 
 **Rationale**: The repo already has Caddy fetch, parse, preview, import, route storage, raw route preservation, and dashboard read-only signals. The smallest safe change is to make those paths truthful and strict instead of replacing them.

@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      #- CADDY_ADMIN_URL=http://caddy:2019
+      - CADDY_ADMIN_URL=http://caddy:2019
       - DB_PATH=/app/data/routes.db
     volumes:
       - orchestrator-data:/app/data
@@ -35,6 +35,19 @@ configs:
     content: |
       {
         admin 0.0.0.0:2019
+      }
+
+      app.localhost {
+        reverse_proxy http://orchestrator:3000
+      }
+
+      files.localhost {
+        root * /usr/share/caddy
+        file_server
+      }
+
+      readonly.localhost {
+        respond "Preserved read-only route"
       }
 
 volumes:

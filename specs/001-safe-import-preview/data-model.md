@@ -77,6 +77,7 @@ Preview-only summary for one route.
 - `destination`: Best available upstream, redirect destination, file root, or blank.
 - `support_status`: `editable`, `partial_readonly`, or `unsupported_readonly`.
 - `readonly_reason`: Required for read-only rows.
+- `raw_caddy_route`: Optional original route JSON for read-only preview rows only, used to validate unsupported handlers before import.
 - `change_type`: `new`, `update`, `local_only_remove`, or `readonly_preserve`.
 
 ### Validation Rules

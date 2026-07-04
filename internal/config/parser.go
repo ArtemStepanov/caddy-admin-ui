@@ -32,6 +32,24 @@ func ParseCaddyConfig(cfg *CaddyConfig) ([]*storage.Route, error) {
 	return routes, nil
 }
 
+const (
+	readOnlyPartialReason     = "contains unsupported middleware or route structure"
+	readOnlyUnsupportedReason = "unknown or unsupported handler"
+)
+
+func markEditable(route *storage.Route) {
+	route.RawCaddyRoute = nil
+	route.ReadOnly = false
+	route.SupportStatus = storage.SupportStatusEditable
+	route.ReadOnlyReason = ""
+}
+
+func markReadOnly(route *storage.Route, status, reason string) {
+	route.ReadOnly = true
+	route.SupportStatus = status
+	route.ReadOnlyReason = reason
+}
+
 func parseRoute(r Route) (*storage.Route, error) {
 	// marshal raw route first
 	rawJSON, err := json.Marshal(r)
@@ -75,6 +93,7 @@ func parseRoute(r Route) (*storage.Route, error) {
 	allHandlers := flattenHandlers(r.Handle)
 
 	var mainHandlerFound bool
+	var varsRoot string
 
 	for _, h := range allHandlers {
 		handlerType, ok := h["handler"].(string)
@@ -102,6 +121,9 @@ func parseRoute(r Route) (*storage.Route, error) {
 
 			cfg, err := parseFileServer(h)
 			if err == nil {
+				if cfg.Root == "" {
+					cfg.Root = varsRoot
+				}
 				storageRoute.HandlerType = "file_server"
 				storageRoute.Config, _ = json.Marshal(cfg)
 				mainHandlerFound = true
@@ -135,6 +157,11 @@ func parseRoute(r Route) (*storage.Route, error) {
 				storageRoute.StripPathPrefix = prefix
 			}
 
+		case "vars":
+			if root, ok := h["root"].(string); ok {
+				varsRoot = root
+			}
+
 		case "encode":
 			// We just ignore encode handler as it's global setting in our model usually,
 			// or implied. But if we want to support per-route encode, we'd need to add it to model.
@@ -143,17 +170,10 @@ func parseRoute(r Route) (*storage.Route, error) {
 	}
 
 	if mainHandlerFound {
-		// If we successfully extracted all handlers via flatten, check whether
-		// the route can be fully rebuilt from our model (all handlers are managed).
-		// If so, clear RawCaddyRoute so the route goes through normal buildRoute
-		// (editable) instead of buildRouteMerged (read-only preservation).
 		if allHandlersManaged(allHandlers) {
-			storageRoute.RawCaddyRoute = nil
+			markEditable(storageRoute)
 		} else {
-			// Route has unmanaged middleware (e.g. crowdsec) — type is detected but
-			// handler-level edits won't propagate on export since we preserve the
-			// original subroute structure. Mark as read-only so the UI can indicate this.
-			storageRoute.ReadOnly = true
+			markReadOnly(storageRoute, storage.SupportStatusPartialReadOnly, readOnlyPartialReason)
 		}
 	} else {
 		// Flattening didn't work (complex subroute). Do a deep search through
@@ -165,7 +185,7 @@ func parseRoute(r Route) (*storage.Route, error) {
 			storageRoute.HandlerType = "unknown"
 		}
 		storageRoute.Config = json.RawMessage("{}")
-		storageRoute.ReadOnly = true
+		markReadOnly(storageRoute, storage.SupportStatusUnsupportedReadOnly, readOnlyUnsupportedReason)
 	}
 
 	return storageRoute, nil
@@ -242,6 +262,12 @@ func extractSimpleSubrouteHandlers(h Handler) []Handler {
 func allHandlersManaged(handlers []Handler) bool {
 	for _, h := range handlers {
 		hType, _ := h["handler"].(string)
+		if hType == "vars" {
+			if _, ok := h["root"].(string); ok && len(h) == 2 {
+				continue
+			}
+			return false
+		}
 		if !managedHandlerTypes[hType] {
 			return false
 		}
@@ -323,12 +349,15 @@ func isRedirectStaticResponse(h Handler) bool {
 func createRawRoute(r Route) *storage.Route {
 	rawJSON, _ := json.Marshal(r)
 	return &storage.Route{
-		ID:            uuid.New().String(),
-		Domain:        "UNKNOWN",
-		HandlerType:   "unknown",
-		Enabled:       true,
-		RawCaddyRoute: rawJSON,
-		Config:        json.RawMessage("{}"),
+		ID:             uuid.New().String(),
+		Domain:         "UNKNOWN",
+		HandlerType:    "unknown",
+		Enabled:        true,
+		RawCaddyRoute:  rawJSON,
+		Config:         json.RawMessage("{}"),
+		ReadOnly:       true,
+		SupportStatus:  storage.SupportStatusUnsupportedReadOnly,
+		ReadOnlyReason: readOnlyUnsupportedReason,
 	}
 }
 
@@ -395,6 +424,14 @@ func parseFileServer(h Handler) (*storage.FileServerConfig, error) {
 	}
 
 	// Precompressed
+	if hide, ok := h["hide"].([]any); ok {
+		for _, item := range hide {
+			if s, ok := item.(string); ok {
+				cfg.Hide = append(cfg.Hide, s)
+			}
+		}
+	}
+
 	if _, ok := h["precompressed"]; ok {
 		cfg.Precompressed = true
 	}

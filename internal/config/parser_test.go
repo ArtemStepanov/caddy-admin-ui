@@ -239,6 +239,66 @@ func TestParseCaddyConfig_Headers(t *testing.T) {
 	}
 }
 
+func TestParseCaddyConfig_CaddyfileFileServerWithRootVarsEditable(t *testing.T) {
+	var cfg CaddyConfig
+	if err := json.Unmarshal([]byte(`{
+		"apps":{"http":{"servers":{"srv0":{"routes":[{
+			"match":[{"host":["files.localhost"]}],
+			"handle":[{"handler":"subroute","routes":[{"handle":[
+				{"handler":"vars","root":"/usr/share/caddy"},
+				{"handler":"file_server","hide":["/etc/caddy/Caddyfile"]}
+			]}]}]
+		}]}}}}
+	}`), &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	routes, err := ParseCaddyConfig(&cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	route := routes[0]
+	if route.ReadOnly || route.SupportStatus != storage.SupportStatusEditable || len(route.RawCaddyRoute) != 0 {
+		t.Fatalf("file server should be editable: %+v raw=%s", route, route.RawCaddyRoute)
+	}
+	var fs storage.FileServerConfig
+	if err := json.Unmarshal(route.Config, &fs); err != nil {
+		t.Fatal(err)
+	}
+	if fs.Root != "/usr/share/caddy" || len(fs.Hide) != 1 || fs.Hide[0] != "/etc/caddy/Caddyfile" {
+		t.Fatalf("bad file server config: %+v", fs)
+	}
+}
+
+func TestParseCaddyConfig_ClassifiesSupportStatus(t *testing.T) {
+	cfg := &CaddyConfig{
+		Apps: &Apps{HTTP: &HTTPApp{Servers: map[string]*Server{
+			"srv0": {Routes: []Route{
+				{Match: []Match{{Host: []string{"editable.example.com"}}}, Handle: []Handler{{"handler": "reverse_proxy", "upstreams": []any{map[string]any{"dial": "localhost:8080"}}}}},
+				{Match: []Match{{Host: []string{"partial.example.com"}}}, Handle: []Handler{{"handler": "crowdsec"}, {"handler": "reverse_proxy", "upstreams": []any{map[string]any{"dial": "localhost:8081"}}}}},
+				{Match: []Match{{Host: []string{"unknown.example.com"}}}, Handle: []Handler{{"handler": "custom_handler"}}},
+			}},
+		}}},
+	}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if routes[0].SupportStatus != storage.SupportStatusEditable || routes[0].ReadOnly || routes[0].ReadOnlyReason != "" {
+		t.Fatalf("editable classification failed: %+v", routes[0])
+	}
+	if routes[1].SupportStatus != storage.SupportStatusPartialReadOnly || !routes[1].ReadOnly || routes[1].ReadOnlyReason == "" {
+		t.Fatalf("partial classification failed: %+v", routes[1])
+	}
+	if routes[2].SupportStatus != storage.SupportStatusUnsupportedReadOnly || !routes[2].ReadOnly || routes[2].ReadOnlyReason == "" {
+		t.Fatalf("unsupported classification failed: %+v", routes[2])
+	}
+}
+
 func TestParseCaddyConfig_UnknownHandler(t *testing.T) {
 	cfg := &CaddyConfig{
 		Apps: &Apps{
