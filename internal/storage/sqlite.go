@@ -70,6 +70,12 @@ func (s *SQLiteStorage) migrate() error {
 	_, _ = s.db.Exec(`ALTER TABLE routes ADD COLUMN strip_path_prefix TEXT DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE routes ADD COLUMN support_status TEXT DEFAULT ''`)
 	_, _ = s.db.Exec(`ALTER TABLE routes ADD COLUMN readonly_reason TEXT DEFAULT ''`)
+	_, err = s.db.Exec(`UPDATE routes
+		SET support_status = ?, readonly_reason = CASE WHEN COALESCE(readonly_reason, '') = '' THEN ? ELSE readonly_reason END
+		WHERE COALESCE(raw_caddy_route, '') != '' AND COALESCE(support_status, '') = ''`, SupportStatusPartialReadOnly, legacyReadOnlyReason)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -222,6 +228,9 @@ func finishRouteScan(route *Route, config string, enabled int, rawCaddyRoute, st
 		} else {
 			route.SupportStatus = SupportStatusEditable
 		}
+	}
+	if len(route.RawCaddyRoute) > 0 && route.SupportStatus != SupportStatusEditable && route.ReadOnlyReason == "" {
+		route.ReadOnlyReason = legacyReadOnlyReason
 	}
 	route.ReadOnly = route.SupportStatus != SupportStatusEditable || len(route.RawCaddyRoute) > 0 && route.ReadOnlyReason != ""
 }

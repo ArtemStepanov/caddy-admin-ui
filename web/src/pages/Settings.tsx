@@ -96,6 +96,7 @@ export function Settings() {
     setImporting(true);
     setError(null);
     setImportResult(null);
+    setImportPreview(null);
     try {
       setImportPreview(await api.previewImport());
     } catch (err: any) {

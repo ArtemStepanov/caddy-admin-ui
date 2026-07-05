@@ -44,4 +44,38 @@ describe('Settings import review', () => {
     fireEvent.click(screen.getByText('Confirm Import'));
     await waitFor(() => expect(screen.getByText(/Imported 2 routes/)).toBeInTheDocument());
   });
+
+  it('clears stale preview when refresh fails', async () => {
+    let previewCalls = 0;
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (url === '/api/config') return json({ config: { caddy_admin_url: 'http://localhost:2019', enable_encode: true } });
+      if (url === '/api/import-preview') {
+        previewCalls++;
+        if (previewCalls === 1) return json({
+          summary: { total_found: 1, editable: 1, readonly_preserved: 0, unsupported: 0, local_only: 0, will_replace_local: true },
+          groups: {
+            new_from_caddy: [{ domain: 'stale.example.com', handler_type: 'reverse_proxy', support_status: 'editable', change_type: 'new' }],
+            will_update: [],
+            local_only: [],
+            readonly_preserved: [],
+          },
+          warnings: [],
+        });
+        return json({ error: 'offline' }, false, 502);
+      }
+      return json({});
+    }));
+
+    render(<Settings />);
+    await screen.findByText('Configuration Import');
+
+    fireEvent.click(screen.getByText('Review Import from Caddy'));
+    await screen.findByText('stale.example.com');
+    expect(screen.getByText('Confirm Import')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Review Import from Caddy'));
+    await screen.findByText(/Import preview failed/);
+    expect(screen.queryByText('stale.example.com')).not.toBeInTheDocument();
+    expect(screen.queryByText('Confirm Import')).not.toBeInTheDocument();
+  });
 });

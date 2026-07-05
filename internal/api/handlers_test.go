@@ -857,6 +857,56 @@ func TestImportFromCaddyTransactionalSuccessAndFailure(t *testing.T) {
 	}
 }
 
+func TestImportFromCaddyDoesNotReuseLocalIDForDuplicateKeys(t *testing.T) {
+	router, store, cleanup := setupTestRouter(t)
+	defer cleanup()
+	server := caddyConfigServer(t, http.StatusOK, `{"apps":{"http":{"servers":{"srv0":{"routes":[{"match":[{"host":["dup.example.com"]}],"handle":[{"handler":"custom_one"}]},{"match":[{"host":["dup.example.com"]}],"handle":[{"handler":"custom_two"}]}]}}}}}`)
+	defer server.Close()
+	_ = store.SetGlobalConfig(&storage.GlobalConfig{CaddyAdminURL: server.URL, EnableEncode: true})
+	existing := &storage.Route{Domain: "dup.example.com", HandlerType: "unknown", Config: json.RawMessage(`{}`), Enabled: true, SupportStatus: storage.SupportStatusUnsupportedReadOnly, ReadOnlyReason: "unknown handler", RawCaddyRoute: json.RawMessage(`{"handle":[{"handler":"old"}]}`)}
+	if err := store.CreateRoute(existing); err != nil {
+		t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest("POST", "/api/import", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("duplicate imported keys should not collide, got %d: %s", w.Code, w.Body.String())
+	}
+	routes, _ := store.ListRoutes()
+	ids := map[string]bool{}
+	for _, route := range routes {
+		ids[route.ID] = true
+	}
+	if len(routes) != 2 || !ids[existing.ID] || len(ids) != 2 {
+		t.Fatalf("expected two unique routes preserving one local id, got %+v", routes)
+	}
+}
+
+func TestImportPreviewPreservesDynamicUpstreams(t *testing.T) {
+	router, store, cleanup := setupTestRouter(t)
+	defer cleanup()
+	server := caddyConfigServer(t, http.StatusOK, `{"apps":{"http":{"servers":{"srv0":{"routes":[{"match":[{"host":["dynamic.example.com"]}],"handle":[{"handler":"reverse_proxy","dynamic_upstreams":{"source":"srv"}}]}]}}}}}`)
+	defer server.Close()
+	_ = store.SetGlobalConfig(&storage.GlobalConfig{CaddyAdminURL: server.URL, EnableEncode: true})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest("POST", "/api/import-preview", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("dynamic upstreams should preview as read-only, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Summary importSummary `json:"summary"`
+		Groups  importGroups  `json:"groups"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Summary.ReadOnlyPreserved != 1 || len(resp.Groups.ReadOnlyPreserved) != 1 || resp.Groups.ReadOnlyPreserved[0].HandlerType != "reverse_proxy" {
+		t.Fatalf("dynamic upstream route not preserved read-only: %+v", resp)
+	}
+}
+
 func TestSyncRejectsInvalidReadOnlyRawRouteWithoutDeletingRoute(t *testing.T) {
 	router, store, cleanup := setupTestRouter(t)
 	defer cleanup()
@@ -989,6 +1039,49 @@ func TestReadOnlyRouteMutationRejectionDetailsAndSyncWarning(t *testing.T) {
 	}
 	if _, err := store.GetRoute(route.ID); err != nil {
 		t.Fatal("sync failure deleted route")
+	}
+}
+
+func TestCreateUpdateRouteIgnoreClientReadOnlyFields(t *testing.T) {
+	router, store, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	createBody := `{"domain":"client.example.com","handler_type":"reverse_proxy","config":{"upstreams":["localhost:8080"]},"support_status":"partial_readonly","readonly_reason":"client says readonly","readonly":true}`
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/routes", bytes.NewBufferString(createBody))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create status %d: %s", w.Code, w.Body.String())
+	}
+	var created struct {
+		Route storage.Route `json:"route"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.GetRoute(created.Route.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ReadOnly || got.SupportStatus != storage.SupportStatusEditable || got.ReadOnlyReason != "" {
+		t.Fatalf("create persisted client read-only fields: %+v", got)
+	}
+
+	updateBody := `{"domain":"client.example.com","handler_type":"reverse_proxy","config":{"upstreams":["localhost:8081"]},"support_status":"unsupported_readonly","readonly_reason":"client says readonly","readonly":true}`
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest("PUT", "/api/routes/"+got.ID, bytes.NewBufferString(updateBody))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("update status %d: %s", w.Code, w.Body.String())
+	}
+	got, err = store.GetRoute(got.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ReadOnly || got.SupportStatus != storage.SupportStatusEditable || got.ReadOnlyReason != "" {
+		t.Fatalf("update persisted client read-only fields: %+v", got)
 	}
 }
 

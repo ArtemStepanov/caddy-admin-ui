@@ -9,6 +9,7 @@ const (
 	SupportStatusEditable            = "editable"
 	SupportStatusPartialReadOnly     = "partial_readonly"
 	SupportStatusUnsupportedReadOnly = "unsupported_readonly"
+	legacyReadOnlyReason             = "preserved legacy raw Caddy route"
 )
 
 // Route represents a single route configuration

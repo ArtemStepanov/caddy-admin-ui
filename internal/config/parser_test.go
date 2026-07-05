@@ -299,6 +299,42 @@ func TestParseCaddyConfig_ClassifiesSupportStatus(t *testing.T) {
 	}
 }
 
+func TestParseCaddyConfig_DynamicUpstreamsAreReadOnly(t *testing.T) {
+	cfg := &CaddyConfig{Apps: &Apps{HTTP: &HTTPApp{Servers: map[string]*Server{
+		"srv0": {Routes: []Route{{Match: []Match{{Host: []string{"dynamic.example.com"}}}, Handle: []Handler{{"handler": "reverse_proxy", "dynamic_upstreams": map[string]any{"source": "srv"}}}}}},
+	}}}}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	route := routes[0]
+	if route.HandlerType != "reverse_proxy" || route.SupportStatus != storage.SupportStatusPartialReadOnly || !route.ReadOnly || len(route.RawCaddyRoute) == 0 {
+		t.Fatalf("dynamic upstreams should be preserved read-only: %+v raw=%s", route, route.RawCaddyRoute)
+	}
+}
+
+func TestParseCaddyConfig_FileServerVarsAfterHandlerIsReadOnly(t *testing.T) {
+	cfg := &CaddyConfig{Apps: &Apps{HTTP: &HTTPApp{Servers: map[string]*Server{
+		"srv0": {Routes: []Route{{Match: []Match{{Host: []string{"files.example.com"}}}, Handle: []Handler{{"handler": "file_server"}, {"handler": "vars", "root": "/srv/www"}}}}},
+	}}}}
+
+	routes, err := ParseCaddyConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	route := routes[0]
+	if route.HandlerType != "file_server" || route.SupportStatus != storage.SupportStatusPartialReadOnly || !route.ReadOnly || len(route.RawCaddyRoute) == 0 {
+		t.Fatalf("late vars root file server should be preserved read-only: %+v raw=%s", route, route.RawCaddyRoute)
+	}
+}
+
 func TestParseCaddyConfig_UnknownHandler(t *testing.T) {
 	cfg := &CaddyConfig{
 		Apps: &Apps{

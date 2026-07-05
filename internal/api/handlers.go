@@ -116,6 +116,12 @@ func isReadOnlyRoute(route *storage.Route) bool {
 	return route != nil && (route.ReadOnly || route.SupportStatus != "" && route.SupportStatus != storage.SupportStatusEditable)
 }
 
+func makeEditableRoute(route *storage.Route) {
+	route.ReadOnly = false
+	route.SupportStatus = storage.SupportStatusEditable
+	route.ReadOnlyReason = ""
+}
+
 func readonlyConflict(c *gin.Context) {
 	c.JSON(http.StatusConflict, gin.H{"error": "route is read-only and managed outside the UI"})
 }
@@ -210,9 +216,11 @@ func preserveMatchingLocalIDs(routes, localRoutes []*storage.Route) {
 		locals[routeKey(route)] = route
 	}
 	for _, route := range routes {
-		if local := locals[routeKey(route)]; local != nil {
+		key := routeKey(route)
+		if local := locals[key]; local != nil {
 			route.ID = local.ID
 			route.CreatedAt = local.CreatedAt
+			delete(locals, key)
 		}
 	}
 }
@@ -323,6 +331,7 @@ func (h *Handler) CreateRoute(c *gin.Context) {
 	}
 
 	route.Enabled = true // New routes are enabled by default
+	makeEditableRoute(&route)
 
 	if err := h.store.CreateRoute(&route); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -378,6 +387,7 @@ func (h *Handler) UpdateRoute(c *gin.Context) {
 	// Preserve state and raw config that isn't editable in the UI
 	route.Enabled = existing.Enabled
 	route.RawCaddyRoute = existing.RawCaddyRoute
+	makeEditableRoute(&route)
 
 	if err := h.store.UpdateRoute(&route); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

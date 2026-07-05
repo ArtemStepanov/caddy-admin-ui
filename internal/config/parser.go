@@ -94,6 +94,8 @@ func parseRoute(r Route) (*storage.Route, error) {
 
 	var mainHandlerFound bool
 	var varsRoot string
+	var preserveReadOnly bool
+	var fileServerNeedsLateVarsRoot bool
 
 	for _, h := range allHandlers {
 		handlerType, ok := h["handler"].(string)
@@ -112,6 +114,9 @@ func parseRoute(r Route) (*storage.Route, error) {
 				storageRoute.HandlerType = "reverse_proxy"
 				storageRoute.Config, _ = json.Marshal(cfg)
 				mainHandlerFound = true
+				if len(cfg.Upstreams) == 0 && hasDynamicUpstreams(h) {
+					preserveReadOnly = true
+				}
 			}
 
 		case "file_server":
@@ -123,6 +128,7 @@ func parseRoute(r Route) (*storage.Route, error) {
 			if err == nil {
 				if cfg.Root == "" {
 					cfg.Root = varsRoot
+					fileServerNeedsLateVarsRoot = cfg.Root == ""
 				}
 				storageRoute.HandlerType = "file_server"
 				storageRoute.Config, _ = json.Marshal(cfg)
@@ -160,6 +166,9 @@ func parseRoute(r Route) (*storage.Route, error) {
 		case "vars":
 			if root, ok := h["root"].(string); ok {
 				varsRoot = root
+				if fileServerNeedsLateVarsRoot {
+					preserveReadOnly = true
+				}
 			}
 
 		case "encode":
@@ -170,7 +179,7 @@ func parseRoute(r Route) (*storage.Route, error) {
 	}
 
 	if mainHandlerFound {
-		if allHandlersManaged(allHandlers) {
+		if allHandlersManaged(allHandlers) && !preserveReadOnly {
 			markEditable(storageRoute)
 		} else {
 			markReadOnly(storageRoute, storage.SupportStatusPartialReadOnly, readOnlyPartialReason)
@@ -344,6 +353,11 @@ func isRedirectStaticResponse(h Handler) bool {
 	}
 	_, hasLocation := headers["Location"]
 	return hasLocation
+}
+
+func hasDynamicUpstreams(h Handler) bool {
+	_, ok := h["dynamic_upstreams"]
+	return ok
 }
 
 func createRawRoute(r Route) *storage.Route {

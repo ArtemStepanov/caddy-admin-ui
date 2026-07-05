@@ -239,3 +239,14 @@ No new dependencies, no raw JSON editor, no per-route import checkboxes, no drif
 - [X] T054 CRITICAL: Add handler-specific import and sync validation so invalid editable route configs are rejected or preserved read-only instead of later being dropped per FR-016 and Constitution II (partial)
 - [X] T055 Implement preview row fallback summaries for routes without host/domain using path, destination/root, or an unknown placeholder per FR-004 (partial)
 - [X] T056 Review, document, or remove raw_caddy_route exposure in import-preview rows so it matches the import-flow contract and FR-016 secret-handling expectations per Contract: import preview row (unrequested)
+
+---
+
+## Phase 9: Convergence
+
+- [X] T057 CRITICAL: Backfill legacy raw_caddy_route rows with support_status and readonly_reason so upgraded databases keep syncing and remain recoverable per FR-013 and Constitution I (partial)
+- [X] T058 CRITICAL: Strip or whitelist server-derived read-only fields on route create/update and test that client JSON cannot create undeletable sync-bricking routes per FR-016 and Constitution II (contradicts)
+- [X] T059 Ensure import ID preservation consumes each local match at most once so duplicate Caddy route keys cannot reuse one primary key and roll back import per FR-008 (partial)
+- [X] T060 Classify reverse_proxy routes without static dial upstreams, including dynamic_upstreams, as read-only preserved instead of failing preview/import per FR-007 (partial)
+- [X] T061 Preserve or classify read-only file_server routes with vars root handlers whose order cannot be rebuilt safely per FR-013 and Constitution I (partial)
+- [X] T062 Clear stale import preview/result state when preview refresh fails so confirm cannot proceed from an old review per FR-001 (partial)

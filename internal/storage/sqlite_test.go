@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -281,6 +282,49 @@ func TestRouteMetadataPersists(t *testing.T) {
 	}
 	if !got.ReadOnly || got.SupportStatus != SupportStatusUnsupportedReadOnly || got.ReadOnlyReason != "unknown handler" || len(got.RawCaddyRoute) == 0 {
 		t.Fatalf("metadata not persisted: %+v raw=%s", got, got.RawCaddyRoute)
+	}
+}
+
+func TestMigrationBackfillsLegacyRawRouteReason(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sqlite_migration_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`CREATE TABLE routes (
+		id TEXT PRIMARY KEY,
+		domain TEXT NOT NULL,
+		path TEXT DEFAULT '',
+		handler_type TEXT NOT NULL,
+		config TEXT NOT NULL,
+		enabled INTEGER DEFAULT 1,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		raw_caddy_route TEXT
+	);
+	INSERT INTO routes (id, domain, handler_type, config, raw_caddy_route)
+	VALUES ('legacy', 'legacy.example.com', 'unknown', '{}', '{"handle":[{"handler":"custom"}]}');`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	storage, err := NewSQLiteStorage(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer storage.Close()
+	got, err := storage.GetRoute("legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.ReadOnly || got.SupportStatus != SupportStatusPartialReadOnly || got.ReadOnlyReason == "" {
+		t.Fatalf("legacy raw route was not backfilled: %+v", got)
 	}
 }
 
