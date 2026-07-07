@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { api, Route, RouteDetails } from '../lib/api';
+import { DRIFT_WARNING, errorMessage } from '../lib/messages';
 import { notifySyncResult } from '../lib/syncNotify';
-
-const DRIFT_WARNING = 'Manual Caddy changes after the last import or sync are not automatically merged. Re-run import review before syncing after manual edits.';
-const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err);
 
 const HANDLER_ICONS: Record<string, string> = {
   reverse_proxy: '🔄',

@@ -229,10 +229,10 @@ func finishRouteScan(route *Route, config string, enabled int, rawCaddyRoute, st
 			route.SupportStatus = SupportStatusEditable
 		}
 	}
-	if len(route.RawCaddyRoute) > 0 && route.SupportStatus != SupportStatusEditable && route.ReadOnlyReason == "" {
+	if len(route.RawCaddyRoute) > 0 && route.IsReadOnly() && route.ReadOnlyReason == "" {
 		route.ReadOnlyReason = legacyReadOnlyReason
 	}
-	route.ReadOnly = route.SupportStatus != SupportStatusEditable || len(route.RawCaddyRoute) > 0 && route.ReadOnlyReason != ""
+	route.ReadOnly = route.IsReadOnly()
 }
 
 // Global config

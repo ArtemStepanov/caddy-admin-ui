@@ -56,6 +56,7 @@ type importSummary struct {
 	ReadOnlyPreserved int  `json:"readonly_preserved"`
 	Unsupported       int  `json:"unsupported"`
 	LocalOnly         int  `json:"local_only"`
+	WillUpdate        int  `json:"will_update"`
 	WillReplaceLocal  bool `json:"will_replace_local"`
 }
 
@@ -112,14 +113,11 @@ func (h *Handler) getCaddyURL() string {
 	return cfg.CaddyAdminURL
 }
 
-func isReadOnlyRoute(route *storage.Route) bool {
-	return route != nil && (route.ReadOnly || route.SupportStatus != "" && route.SupportStatus != storage.SupportStatusEditable)
-}
-
 func makeEditableRoute(route *storage.Route) {
 	route.ReadOnly = false
 	route.SupportStatus = storage.SupportStatusEditable
 	route.ReadOnlyReason = ""
+	route.RawCaddyRoute = nil
 }
 
 func readonlyConflict(c *gin.Context) {
@@ -184,7 +182,7 @@ func routeRow(route *storage.Route, changeType string) importRouteRow {
 		ReadOnlyReason: route.ReadOnlyReason,
 		ChangeType:     changeType,
 	}
-	if isReadOnlyRoute(route) {
+	if route.IsReadOnly() {
 		row.RawCaddyRoute = route.RawCaddyRoute
 	}
 	return row
@@ -195,7 +193,7 @@ func validateImportedRoutes(routes []*storage.Route) error {
 		if route.SupportStatus == "" {
 			route.SupportStatus = storage.SupportStatusEditable
 		}
-		if isReadOnlyRoute(route) {
+		if route.IsReadOnly() {
 			route.ReadOnly = true
 			if len(route.RawCaddyRoute) == 0 {
 				return fmt.Errorf("read-only route is missing preserved raw config")
@@ -248,6 +246,7 @@ func buildImportPreview(routes, localRoutes []*storage.Route) (importSummary, im
 			if local := locals[key]; local != nil {
 				row.RouteID = local.ID
 				row.ChangeType = "update"
+				summary.WillUpdate++
 				groups.WillUpdate = append(groups.WillUpdate, row)
 			} else {
 				groups.NewFromCaddy = append(groups.NewFromCaddy, row)
@@ -278,23 +277,23 @@ func buildImportPreview(routes, localRoutes []*storage.Route) (importSummary, im
 func fetchParsedCaddyRoutes(h *Handler) ([]*storage.Route, int, error) {
 	raw, err := h.getCaddyClient().GetConfig("")
 	if err != nil {
-		return nil, http.StatusBadGateway, fmt.Errorf("Failed to connect to Caddy")
+		return nil, http.StatusBadGateway, fmt.Errorf("failed to connect to Caddy")
 	}
 
 	var caddyConfig config.CaddyConfig
 	if err := json.Unmarshal(raw, &caddyConfig); err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("Failed to parse Caddy response")
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse Caddy response")
 	}
 
 	routes, err := config.ParseCaddyConfig(&caddyConfig)
 	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("Failed to parse Caddy config")
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse Caddy config")
 	}
 	if err := validateImportedRoutes(routes); err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("Failed to validate Caddy routes: %w", err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to validate Caddy routes: %w", err)
 	}
 	if err := config.ValidateRoutesForBuild(routes); err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("Failed to validate Caddy routes: %w", err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to validate Caddy routes: %w", err)
 	}
 	return routes, http.StatusOK, nil
 }
@@ -370,7 +369,7 @@ func (h *Handler) UpdateRoute(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "route not found"})
 		return
 	}
-	if isReadOnlyRoute(existing) {
+	if existing.IsReadOnly() {
 		readonlyConflict(c)
 		return
 	}
@@ -384,9 +383,8 @@ func (h *Handler) UpdateRoute(c *gin.Context) {
 	// Preserve ID and timestamps
 	route.ID = existing.ID
 	route.CreatedAt = existing.CreatedAt
-	// Preserve state and raw config that isn't editable in the UI
+	// Preserve state that isn't editable in the UI
 	route.Enabled = existing.Enabled
-	route.RawCaddyRoute = existing.RawCaddyRoute
 	makeEditableRoute(&route)
 
 	if err := h.store.UpdateRoute(&route); err != nil {
@@ -414,7 +412,7 @@ func (h *Handler) DeleteRoute(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "route not found"})
 		return
 	}
-	if isReadOnlyRoute(existing) {
+	if existing.IsReadOnly() {
 		readonlyConflict(c)
 		return
 	}
@@ -444,7 +442,7 @@ func (h *Handler) ToggleRoute(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "route not found"})
 		return
 	}
-	if isReadOnlyRoute(route) {
+	if route.IsReadOnly() {
 		readonlyConflict(c)
 		return
 	}
@@ -645,7 +643,7 @@ func (h *Handler) PreviewImport(c *gin.Context) {
 	}
 	localRoutes, err := h.store.ListRoutes()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read local routes"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read local routes"})
 		return
 	}
 	summary, groups := buildImportPreview(routes, localRoutes)
@@ -665,13 +663,13 @@ func (h *Handler) ImportFromCaddy(c *gin.Context) {
 	}
 	localRoutes, err := h.store.ListRoutes()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read local routes", "recovery_guidance": recoveryGuidance})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read local routes", "recovery_guidance": recoveryGuidance})
 		return
 	}
 	preserveMatchingLocalIDs(routes, localRoutes)
 
 	if err := h.store.ReplaceAllRoutes(routes); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save imported routes", "recovery_guidance": recoveryGuidance})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save imported routes", "recovery_guidance": recoveryGuidance})
 		return
 	}
 
@@ -689,7 +687,7 @@ func (h *Handler) ImportFromCaddy(c *gin.Context) {
 // GetRouteDetails returns preserved raw JSON for read-only routes.
 func (h *Handler) GetRouteDetails(c *gin.Context) {
 	route, err := h.store.GetRoute(c.Param("id"))
-	if err != nil || len(route.RawCaddyRoute) == 0 {
+	if err != nil || route == nil || !route.IsReadOnly() || len(route.RawCaddyRoute) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "route details not found"})
 		return
 	}

@@ -15,7 +15,7 @@ describe('Settings import review', () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url === '/api/config') return json({ config: { caddy_admin_url: 'http://localhost:2019', enable_encode: true } });
       if (url === '/api/import-preview') return json({
-        summary: { total_found: 2, editable: 1, readonly_preserved: 1, unsupported: 1, local_only: 1, will_replace_local: true },
+        summary: { total_found: 2, editable: 1, readonly_preserved: 1, unsupported: 1, local_only: 1, will_update: 0, will_replace_local: true },
         groups: {
           new_from_caddy: [{ domain: 'app.example.com', handler_type: 'reverse_proxy', destination: 'localhost:8080', support_status: 'editable', change_type: 'new' }],
           will_update: [],
@@ -52,7 +52,7 @@ describe('Settings import review', () => {
       if (url === '/api/import-preview') {
         previewCalls++;
         if (previewCalls === 1) return json({
-          summary: { total_found: 1, editable: 1, readonly_preserved: 0, unsupported: 0, local_only: 0, will_replace_local: true },
+          summary: { total_found: 1, editable: 1, readonly_preserved: 0, unsupported: 0, local_only: 0, will_update: 0, will_replace_local: true },
           groups: {
             new_from_caddy: [{ domain: 'stale.example.com', handler_type: 'reverse_proxy', support_status: 'editable', change_type: 'new' }],
             will_update: [],

@@ -276,17 +276,16 @@ func TestUpdateRoute_PreservesEnabled(t *testing.T) {
 	}
 }
 
-func TestUpdateRoute_PreservesRawCaddyRoute(t *testing.T) {
+func TestUpdateRoute_EditableRouteHasNoRawCaddyRoute(t *testing.T) {
 	router, store, cleanup := setupTestRouter(t)
 	defer cleanup()
 
-	// Create a route with RawCaddyRoute
+	// Create an editable route
 	route := &storage.Route{
-		Domain:        "example.com",
-		HandlerType:   "reverse_proxy",
-		Config:        json.RawMessage(`{}`),
-		Enabled:       true,
-		RawCaddyRoute: json.RawMessage(`{"original": "data"}`),
+		Domain:      "example.com",
+		HandlerType: "reverse_proxy",
+		Config:      json.RawMessage(`{"upstreams":["localhost:8080"]}`),
+		Enabled:     true,
 	}
 	store.CreateRoute(route)
 
@@ -294,7 +293,7 @@ func TestUpdateRoute_PreservesRawCaddyRoute(t *testing.T) {
 	body := `{
 		"domain": "example.com",
 		"handler_type": "reverse_proxy",
-		"config": {}
+		"config": {"upstreams":["localhost:9090"]}
 	}`
 
 	req := httptest.NewRequest("PUT", "/api/routes/"+route.ID, bytes.NewBufferString(body))
@@ -306,10 +305,42 @@ func TestUpdateRoute_PreservesRawCaddyRoute(t *testing.T) {
 		t.Errorf("Expected status %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
-	// Verify
+	// Verify editable route remains free of preserved raw config
 	updated, _ := store.GetRoute(route.ID)
-	if string(updated.RawCaddyRoute) != `{"original": "data"}` {
-		t.Errorf("Expected RawCaddyRoute to be preserved, got %s", updated.RawCaddyRoute)
+	if len(updated.RawCaddyRoute) != 0 {
+		t.Errorf("Expected RawCaddyRoute to be empty for editable route, got %s", updated.RawCaddyRoute)
+	}
+}
+
+func TestUpdateRoute_RejectsReadOnlyRoute(t *testing.T) {
+	router, store, cleanup := setupTestRouter(t)
+	defer cleanup()
+
+	// Create a read-only preserved route
+	route := &storage.Route{
+		Domain:         "example.com",
+		HandlerType:    "reverse_proxy",
+		Config:         json.RawMessage(`{}`),
+		Enabled:        true,
+		SupportStatus:  storage.SupportStatusUnsupportedReadOnly,
+		ReadOnlyReason: "unknown handler",
+		RawCaddyRoute:  json.RawMessage(`{"original": "data"}`),
+	}
+	store.CreateRoute(route)
+
+	body := `{
+		"domain": "example.com",
+		"handler_type": "reverse_proxy",
+		"config": {}
+	}`
+
+	req := httptest.NewRequest("PUT", "/api/routes/"+route.ID, bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("Expected status %d, got %d. Body: %s", http.StatusConflict, w.Code, w.Body.String())
 	}
 }
 

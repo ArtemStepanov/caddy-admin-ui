@@ -12,6 +12,14 @@ const (
 	legacyReadOnlyReason             = "preserved legacy raw Caddy route"
 )
 
+// IsReadOnly reports whether the route should be treated as preserved and non-mutating.
+func (r *Route) IsReadOnly() bool {
+	if r == nil {
+		return false
+	}
+	return r.ReadOnly || (r.SupportStatus != "" && r.SupportStatus != SupportStatusEditable)
+}
+
 // Route represents a single route configuration
 type Route struct {
 	ID              string          `json:"id"`

@@ -83,7 +83,7 @@ func ValidateRoutesForBuild(routes []*storage.Route) error {
 		if route.Domain == "" || route.HandlerType == "" {
 			return fmt.Errorf("route %q is missing domain or handler type", route.ID)
 		}
-		readOnly := route.ReadOnly || route.SupportStatus != "" && route.SupportStatus != storage.SupportStatusEditable
+		readOnly := route.IsReadOnly()
 		if readOnly {
 			if len(route.RawCaddyRoute) == 0 || route.ReadOnlyReason == "" {
 				return fmt.Errorf("read-only route %q is missing preserved raw config or reason", route.ID)
@@ -177,7 +177,7 @@ func BuildCaddyConfig(routes []*storage.Route, global *storage.GlobalConfig) *Ca
 // buildRoute converts a single stored route to a Caddy route
 func buildRoute(r *storage.Route, global *storage.GlobalConfig) *Route {
 	// Read-only means hands off: emit the original Caddy route unchanged.
-	if len(r.RawCaddyRoute) > 0 && (r.ReadOnly || r.SupportStatus != "" && r.SupportStatus != storage.SupportStatusEditable) {
+	if len(r.RawCaddyRoute) > 0 && r.IsReadOnly() {
 		var original Route
 		if err := json.Unmarshal(r.RawCaddyRoute, &original); err != nil || len(original.Handle) == 0 {
 			return nil

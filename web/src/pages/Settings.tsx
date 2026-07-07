@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
 import { api, GlobalConfig, ImportPreview, ImportRouteRow, ImportResult } from '../lib/api';
-
-const DRIFT_WARNING = 'Manual Caddy changes after the last import or sync are not automatically merged. Re-run import review before syncing after manual edits.';
-const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err);
+import { DRIFT_WARNING, errorMessage } from '../lib/messages';
 
 function ImportRows({ title, rows }: { title: string; rows: ImportRouteRow[] }) {
   if (rows.length === 0) return null;
@@ -11,7 +9,7 @@ function ImportRows({ title, rows }: { title: string; rows: ImportRouteRow[] }) 
       <h3 class="font-medium text-slate-200 mb-2">{title} ({rows.length})</h3>
       <div class="space-y-2">
         {rows.map((row, i) => (
-          <div key={`${row.change_type}-${row.domain}-${row.path}-${i}`} class="bg-slate-900/60 rounded p-3 text-sm">
+          <div key={`${row.change_type}-${row.domain}-${row.path}-${row.handler_type}-${i}`} class="bg-slate-900/60 rounded p-3 text-sm">
             <div class="flex items-center justify-between gap-3">
               <span class="font-medium">{row.domain}{row.path ? ` ${row.path}` : ''}</span>
               <span class="text-xs px-2 py-0.5 rounded bg-slate-700">{row.support_status}</span>
@@ -248,9 +246,10 @@ export function Settings() {
 
           {importPreview && (
             <div class="mt-6 space-y-5">
-              <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center text-sm">
+              <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-center text-sm">
                 <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold">{importPreview.summary.total_found}</div><div class="text-slate-400">Found</div></div>
                 <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-green-300">{importPreview.summary.editable}</div><div class="text-slate-400">Editable</div></div>
+                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-blue-300">{importPreview.summary.will_update}</div><div class="text-slate-400">Will update</div></div>
                 <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-amber-300">{importPreview.summary.readonly_preserved}</div><div class="text-slate-400">Read-only</div></div>
                 <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-red-300">{importPreview.summary.unsupported}</div><div class="text-slate-400">Unsupported</div></div>
                 <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold">{importPreview.summary.local_only}</div><div class="text-slate-400">Local-only removed</div></div>

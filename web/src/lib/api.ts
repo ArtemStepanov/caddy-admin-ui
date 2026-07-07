@@ -45,6 +45,7 @@ export interface ImportPreview {
     readonly_preserved: number;
     unsupported: number;
     local_only: number;
+    will_update: number;
     will_replace_local: boolean;
   };
   groups: {
