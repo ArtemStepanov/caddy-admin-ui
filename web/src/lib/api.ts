@@ -8,6 +8,8 @@ export interface HeaderConfig {
   delete?: string[];
 }
 
+export type SupportStatus = 'editable' | 'partial_readonly' | 'unsupported_readonly';
+
 export interface Route {
   id: string;
   domain: string;
@@ -18,8 +20,55 @@ export interface Route {
   headers?: HeaderConfig;
   enabled: boolean;
   readonly?: boolean;
+  support_status?: SupportStatus;
+  readonly_reason?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ImportRouteRow {
+  route_id?: string;
+  domain: string;
+  path?: string;
+  handler_type: string;
+  destination?: string;
+  support_status: SupportStatus;
+  readonly_reason?: string;
+  raw_caddy_route?: unknown;
+  change_type: 'new' | 'update' | 'local_only_remove' | 'readonly_preserve';
+}
+
+export interface ImportPreview {
+  summary: {
+    total_found: number;
+    editable: number;
+    readonly_preserved: number;
+    unsupported: number;
+    local_only: number;
+    will_update: number;
+    will_replace_local: boolean;
+  };
+  groups: {
+    new_from_caddy: ImportRouteRow[];
+    will_update: ImportRouteRow[];
+    local_only: ImportRouteRow[];
+    readonly_preserved: ImportRouteRow[];
+  };
+  warnings: string[];
+}
+
+export interface ImportResult {
+  imported: number;
+  editable: number;
+  readonly_preserved: number;
+  unsupported: number;
+  message: string;
+  warnings: string[];
+}
+
+export interface RouteDetails {
+  route: Pick<Route, 'id' | 'domain' | 'path' | 'handler_type' | 'support_status' | 'readonly_reason'>;
+  raw_caddy_route: unknown;
 }
 
 export interface GlobalConfig {
@@ -128,12 +177,16 @@ class ApiClient {
     });
   }
 
-  async previewImport(): Promise<{ routes: Route[]; count: number }> {
+  async previewImport(): Promise<ImportPreview> {
     return this.request('/import-preview', { method: 'POST' });
   }
 
-  async importFromCaddy(): Promise<{ imported: number; message: string }> {
+  async importFromCaddy(): Promise<ImportResult> {
     return this.request('/import', { method: 'POST' });
+  }
+
+  async getRouteDetails(id: string): Promise<RouteDetails> {
+    return this.request(`/routes/${id}/details`);
   }
 }
 

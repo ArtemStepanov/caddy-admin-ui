@@ -68,6 +68,14 @@ func (s *SQLiteStorage) migrate() error {
 
 	// Migration: Add strip_path_prefix column if it doesn't exist
 	_, _ = s.db.Exec(`ALTER TABLE routes ADD COLUMN strip_path_prefix TEXT DEFAULT ''`)
+	_, _ = s.db.Exec(`ALTER TABLE routes ADD COLUMN support_status TEXT DEFAULT ''`)
+	_, _ = s.db.Exec(`ALTER TABLE routes ADD COLUMN readonly_reason TEXT DEFAULT ''`)
+	_, err = s.db.Exec(`UPDATE routes
+		SET support_status = ?, readonly_reason = CASE WHEN COALESCE(readonly_reason, '') = '' THEN ? ELSE readonly_reason END
+		WHERE COALESCE(raw_caddy_route, '') != '' AND COALESCE(support_status, '') = ''`, SupportStatusPartialReadOnly, legacyReadOnlyReason)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -76,26 +84,13 @@ func (s *SQLiteStorage) migrate() error {
 
 // CreateRoute creates a new route
 func (s *SQLiteStorage) CreateRoute(route *Route) error {
-	if route.ID == "" {
-		route.ID = uuid.New().String()
-	}
-	route.CreatedAt = time.Now()
-	route.UpdatedAt = time.Now()
-
-	_, err := s.db.Exec(
-		`INSERT INTO routes (id, domain, path, handler_type, config, enabled, created_at, updated_at, raw_caddy_route, strip_path_prefix)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		route.ID, route.Domain, route.Path, route.HandlerType,
-		string(route.Config), boolToInt(route.Enabled), route.CreatedAt, route.UpdatedAt,
-		string(route.RawCaddyRoute), route.StripPathPrefix,
-	)
-	return err
+	return s.insertRoute(s.db, route)
 }
 
 // GetRoute retrieves a route by ID
 func (s *SQLiteStorage) GetRoute(id string) (*Route, error) {
 	row := s.db.QueryRow(
-		`SELECT id, domain, path, handler_type, config, enabled, created_at, updated_at, COALESCE(raw_caddy_route, ''), COALESCE(strip_path_prefix, '')
+		`SELECT id, domain, path, handler_type, config, enabled, created_at, updated_at, COALESCE(raw_caddy_route, ''), COALESCE(strip_path_prefix, ''), COALESCE(support_status, ''), COALESCE(readonly_reason, '')
 		 FROM routes WHERE id = ?`, id,
 	)
 	return s.scanRoute(row)
@@ -104,7 +99,7 @@ func (s *SQLiteStorage) GetRoute(id string) (*Route, error) {
 // ListRoutes returns all routes
 func (s *SQLiteStorage) ListRoutes() ([]*Route, error) {
 	rows, err := s.db.Query(
-		`SELECT id, domain, path, handler_type, config, enabled, created_at, updated_at, COALESCE(raw_caddy_route, ''), COALESCE(strip_path_prefix, '')
+		`SELECT id, domain, path, handler_type, config, enabled, created_at, updated_at, COALESCE(raw_caddy_route, ''), COALESCE(strip_path_prefix, ''), COALESCE(support_status, ''), COALESCE(readonly_reason, '')
 		 FROM routes ORDER BY domain, path`,
 	)
 	if err != nil {
@@ -127,10 +122,10 @@ func (s *SQLiteStorage) ListRoutes() ([]*Route, error) {
 func (s *SQLiteStorage) UpdateRoute(route *Route) error {
 	route.UpdatedAt = time.Now()
 	_, err := s.db.Exec(
-		`UPDATE routes SET domain=?, path=?, handler_type=?, config=?, enabled=?, updated_at=?, raw_caddy_route=?, strip_path_prefix=?
+		`UPDATE routes SET domain=?, path=?, handler_type=?, config=?, enabled=?, updated_at=?, raw_caddy_route=?, strip_path_prefix=?, support_status=?, readonly_reason=?
 		 WHERE id=?`,
 		route.Domain, route.Path, route.HandlerType,
-		string(route.Config), boolToInt(route.Enabled), route.UpdatedAt, string(route.RawCaddyRoute), route.StripPathPrefix, route.ID,
+		string(route.Config), boolToInt(route.Enabled), route.UpdatedAt, string(route.RawCaddyRoute), route.StripPathPrefix, route.SupportStatus, route.ReadOnlyReason, route.ID,
 	)
 	return err
 }
@@ -141,9 +136,46 @@ func (s *SQLiteStorage) DeleteRoute(id string) error {
 	return err
 }
 
-// DeleteAllRoutes deletes all routes (used for import)
-func (s *SQLiteStorage) DeleteAllRoutes() error {
-	_, err := s.db.Exec(`DELETE FROM routes`)
+// ReplaceAllRoutes atomically replaces all routes.
+func (s *SQLiteStorage) ReplaceAllRoutes(routes []*Route) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM routes`); err != nil {
+		return err
+	}
+	for _, route := range routes {
+		if err := s.insertRoute(tx, route); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *SQLiteStorage) insertRoute(exec interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}, route *Route) error {
+	if route.ID == "" {
+		route.ID = uuid.New().String()
+	}
+	if route.SupportStatus == "" {
+		route.SupportStatus = SupportStatusEditable
+	}
+	if route.CreatedAt.IsZero() {
+		route.CreatedAt = time.Now()
+	}
+	route.UpdatedAt = time.Now()
+
+	_, err := exec.Exec(
+		`INSERT INTO routes (id, domain, path, handler_type, config, enabled, created_at, updated_at, raw_caddy_route, strip_path_prefix, support_status, readonly_reason)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		route.ID, route.Domain, route.Path, route.HandlerType,
+		string(route.Config), boolToInt(route.Enabled), route.CreatedAt, route.UpdatedAt,
+		string(route.RawCaddyRoute), route.StripPathPrefix, route.SupportStatus, route.ReadOnlyReason,
+	)
 	return err
 }
 
@@ -156,18 +188,12 @@ func (s *SQLiteStorage) scanRoute(row *sql.Row) (*Route, error) {
 	err := row.Scan(
 		&route.ID, &route.Domain, &route.Path, &route.HandlerType,
 		&config, &enabled, &route.CreatedAt, &route.UpdatedAt,
-		&rawCaddyRoute, &stripPathPrefix,
+		&rawCaddyRoute, &stripPathPrefix, &route.SupportStatus, &route.ReadOnlyReason,
 	)
 	if err != nil {
 		return nil, err
 	}
-	route.Config = json.RawMessage(config)
-	route.Enabled = enabled == 1
-	if rawCaddyRoute != "" {
-		route.RawCaddyRoute = json.RawMessage(rawCaddyRoute)
-	}
-	route.StripPathPrefix = stripPathPrefix
-	route.ReadOnly = len(route.RawCaddyRoute) > 0
+	finishRouteScan(&route, config, enabled, rawCaddyRoute, stripPathPrefix)
 	return &route, nil
 }
 
@@ -180,19 +206,33 @@ func (s *SQLiteStorage) scanRouteRows(rows *sql.Rows) (*Route, error) {
 	err := rows.Scan(
 		&route.ID, &route.Domain, &route.Path, &route.HandlerType,
 		&config, &enabled, &route.CreatedAt, &route.UpdatedAt,
-		&rawCaddyRoute, &stripPathPrefix,
+		&rawCaddyRoute, &stripPathPrefix, &route.SupportStatus, &route.ReadOnlyReason,
 	)
 	if err != nil {
 		return nil, err
 	}
+	finishRouteScan(&route, config, enabled, rawCaddyRoute, stripPathPrefix)
+	return &route, nil
+}
+
+func finishRouteScan(route *Route, config string, enabled int, rawCaddyRoute, stripPathPrefix string) {
 	route.Config = json.RawMessage(config)
 	route.Enabled = enabled == 1
 	if rawCaddyRoute != "" {
 		route.RawCaddyRoute = json.RawMessage(rawCaddyRoute)
 	}
 	route.StripPathPrefix = stripPathPrefix
-	route.ReadOnly = len(route.RawCaddyRoute) > 0
-	return &route, nil
+	if route.SupportStatus == "" {
+		if len(route.RawCaddyRoute) > 0 {
+			route.SupportStatus = SupportStatusPartialReadOnly
+		} else {
+			route.SupportStatus = SupportStatusEditable
+		}
+	}
+	if len(route.RawCaddyRoute) > 0 && route.IsReadOnly() && route.ReadOnlyReason == "" {
+		route.ReadOnlyReason = legacyReadOnlyReason
+	}
+	route.ReadOnly = route.IsReadOnly()
 }
 
 // Global config
@@ -203,11 +243,8 @@ func (s *SQLiteStorage) GetGlobalConfig() (*GlobalConfig, error) {
 	var value string
 	err := row.Scan(&value)
 	if err == sql.ErrNoRows {
-		// Return defaults
-		return &GlobalConfig{
-			CaddyAdminURL: "http://localhost:2019",
-			EnableEncode:  true,
-		}, nil
+		// URL default is owned by the API handler so env config is honored.
+		return &GlobalConfig{EnableEncode: true}, nil
 	}
 	if err != nil {
 		return nil, err

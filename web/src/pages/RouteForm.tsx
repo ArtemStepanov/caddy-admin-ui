@@ -105,6 +105,25 @@ export function RouteForm({ id }: RouteFormProps) {
     );
   }
 
+  if (readOnly) {
+    return (
+      <div class="max-w-3xl mx-auto">
+        <div class="flex items-center justify-between mb-6">
+          <h1 class="text-2xl font-bold">Read-only Route</h1>
+          <a href="/" class="btn btn-secondary">Back</a>
+        </div>
+        {error && (
+          <div class="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-6 text-red-300">
+            {error}
+          </div>
+        )}
+        <div class="bg-amber-900/50 border border-amber-700 rounded-lg p-4 text-amber-300">
+          {domain} is managed outside the UI and cannot be edited, deleted, toggled, or field-mutated here. Use the dashboard View JSON action for technical details.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div class="max-w-3xl mx-auto">
       <div class="flex items-center justify-between mb-6">
@@ -115,12 +134,6 @@ export function RouteForm({ id }: RouteFormProps) {
       {error && (
         <div class="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-6 text-red-300">
           {error}
-        </div>
-      )}
-
-      {readOnly && (
-        <div class="bg-amber-900/50 border border-amber-700 rounded-lg p-4 mb-6 text-amber-300">
-          This route was imported with unmanaged middleware (e.g. crowdsec, appsec) and its handler configuration is read-only. You can still edit the domain, path, and enable/disable the route.
         </div>
       )}
 

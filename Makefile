@@ -32,7 +32,7 @@ docker-up:
 
 # Run with Docker Compose (local build)
 docker-up-build:
-	docker build -t ghcr.io/artemstepanov/caddy-admin-ui:latest . && docker compose up -d
+	docker build -t ghcr.io/artemstepanov/caddy-admin-ui:latest . && docker compose up -d --force-recreate
 
 # Stop Docker Compose
 docker-down:
