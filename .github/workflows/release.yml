@@ -21,7 +21,7 @@ jobs:
       minor: ${{ steps.release.outputs.minor }}
     steps:
       - id: release
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
 
   # Note: release-please creates tags with the default GITHUB_TOKEN, which does
   # not trigger tag-push workflows. The Docker build therefore chains off the

@@ -34,6 +34,7 @@ logs/
 
 # Environment
 .env
+.env*
 .env.local
 .env.development
 .env.production
@@ -48,6 +49,8 @@ Thumbs.db
 # Frontend
 node_modules/
 dist/
+build/
+vendor/
 .cache/
 
 # Temporary files

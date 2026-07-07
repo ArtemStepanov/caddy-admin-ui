@@ -7,6 +7,27 @@ import (
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/storage"
 )
 
+func TestBuildCaddyConfig_ReadOnlyRawRouteUnchanged(t *testing.T) {
+	raw := json.RawMessage(`{"match":[{"host":["caddy.example.com"]}],"handle":[{"handler":"custom","secret":"keep"}],"terminal":true}`)
+	routes := []*storage.Route{{
+		Domain:         "edited.example.com",
+		Path:           "/changed",
+		HandlerType:    "unknown",
+		Config:         json.RawMessage(`{}`),
+		Enabled:        true,
+		ReadOnly:       true,
+		SupportStatus:  storage.SupportStatusUnsupportedReadOnly,
+		ReadOnlyReason: "unknown handler",
+		RawCaddyRoute:  raw,
+	}}
+
+	cfg := BuildCaddyConfig(routes, &storage.GlobalConfig{EnableEncode: true})
+	got := cfg.Apps.HTTP.Servers["srv0"].Routes[0]
+	if got.Match[0].Host[0] != "caddy.example.com" || got.Handle[0]["handler"] != "custom" || got.Handle[0]["secret"] != "keep" {
+		t.Fatalf("raw route changed: %+v", got)
+	}
+}
+
 func TestBuildCaddyConfig_Empty(t *testing.T) {
 	cfg := BuildCaddyConfig(nil, nil)
 
