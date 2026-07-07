@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'preact/hooks';
 import { api, Route, RouteDetails } from '../lib/api';
+import { notifySyncResult } from '../lib/syncNotify';
 
 const DRIFT_WARNING = 'Manual Caddy changes after the last import or sync are not automatically merged. Re-run import review before syncing after manual edits.';
-import { notifySyncResult } from '../lib/syncNotify';
+const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err);
 
 const HANDLER_ICONS: Record<string, string> = {
   reverse_proxy: '🔄',
@@ -132,8 +133,8 @@ export function Dashboard() {
     try {
       const { routes } = await api.listRoutes();
       setRoutes(routes || []);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -147,8 +148,8 @@ export function Dashboard() {
     try {
       const { route } = await api.toggleRoute(id);
       setRoutes(routes.map((r) => (r.id === id ? route : r)));
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     }
   }
 
@@ -158,16 +159,16 @@ export function Dashboard() {
     try {
       await api.deleteRoute(id);
       setRoutes(routes.filter((r) => r.id !== id));
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     }
   }
 
   async function handleDetails(id: string) {
     try {
       setDetails(await api.getRouteDetails(id));
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     }
   }
 
@@ -176,8 +177,8 @@ export function Dashboard() {
     try {
       await api.sync();
       notifySyncResult('success', 'Synced to Caddy successfully');
-    } catch (err: any) {
-      notifySyncResult('error', 'Sync failed: ' + err.message);
+    } catch (err: unknown) {
+      notifySyncResult('error', 'Sync failed: ' + errorMessage(err));
     } finally {
       setSyncing(false);
     }

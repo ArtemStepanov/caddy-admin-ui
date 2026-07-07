@@ -2,6 +2,7 @@ import { useState, useEffect } from 'preact/hooks';
 import { api, GlobalConfig, ImportPreview, ImportRouteRow, ImportResult } from '../lib/api';
 
 const DRIFT_WARNING = 'Manual Caddy changes after the last import or sync are not automatically merged. Re-run import review before syncing after manual edits.';
+const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err);
 
 function ImportRows({ title, rows }: { title: string; rows: ImportRouteRow[] }) {
   if (rows.length === 0) return null;
@@ -50,8 +51,8 @@ export function Settings() {
     try {
       const { config: cfg } = await api.getConfig();
       setConfig(cfg);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -72,8 +73,8 @@ export function Settings() {
       await api.sync();
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -85,8 +86,8 @@ export function Settings() {
     try {
       const result = await api.testConnection(config.caddy_admin_url);
       setTestResult(result);
-    } catch (err: any) {
-      setTestResult({ success: false, error: err.message });
+    } catch (err: unknown) {
+      setTestResult({ success: false, error: errorMessage(err) });
     } finally {
       setTesting(false);
     }
@@ -99,8 +100,8 @@ export function Settings() {
     setImportPreview(null);
     try {
       setImportPreview(await api.previewImport());
-    } catch (err: any) {
-      setError("Import preview failed: " + err.message);
+    } catch (err: unknown) {
+      setError("Import preview failed: " + errorMessage(err));
     } finally {
       setImporting(false);
     }
@@ -114,8 +115,8 @@ export function Settings() {
       setImportResult(result);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err: any) {
-      setError("Import failed: " + err.message);
+    } catch (err: unknown) {
+      setError("Import failed: " + errorMessage(err));
     } finally {
       setImporting(false);
     }
