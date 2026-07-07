@@ -12,7 +12,8 @@ A lightweight web UI for managing [Caddy](https://caddyserver.com/) routes witho
 - **Headers** — add security and CORS headers
 - **Basic Auth** — password-protect routes
 - **Compression** — enable gzip/zstd encoding
-- **Import** — pull existing routes from a running Caddy instance
+- **Import Review** — preview Caddy routes before replacing local state
+- **Read-only Preservation** — keep unsupported Caddy routes visible and sync-preserved without editing them
 
 ## Quick Start
 
@@ -101,8 +102,13 @@ Preact/TypeScript UI  ──/api/*──►  Go backend (Gin)  ──HTTP──�
 | `GET/PUT` | `/api/config` | Global configuration |
 | `GET` | `/api/status` | Caddy connection status |
 | `POST` | `/api/sync` | Sync all routes to Caddy |
-| `POST` | `/api/import-preview` | Preview import from Caddy |
-| `POST` | `/api/import` | Import routes from Caddy |
+| `POST` | `/api/import-preview` | Preview import summary/groups from Caddy without changing local routes |
+| `POST` | `/api/import` | Transactionally replace local routes from Caddy |
+| `GET` | `/api/routes/:id/details` | View preserved raw JSON for read-only routes |
+
+## Import Safety
+
+Import preview classifies discovered HTTP routes as editable or read-only preserved. Unsupported routes remain visible, are emitted back to Caddy unchanged on sync, and cannot be edited, deleted, or toggled from the UI/API. Manual Caddy changes are not auto-merged; re-run import review before syncing after manual edits.
 
 ## License
 

@@ -29,6 +29,7 @@ bin/
 # Docker
 Dockerfile*
 docker-compose*.yml
+.dockerignore
 .docker/
 
 # Database
@@ -38,7 +39,9 @@ docker-compose*.yml
 # Misc
 *.md
 *.log
+*.log*
 .env*
+coverage/
 .tasks/
 docs/
 scripts/

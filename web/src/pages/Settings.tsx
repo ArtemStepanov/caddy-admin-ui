@@ -1,5 +1,33 @@
 import { useState, useEffect } from 'preact/hooks';
-import { api, GlobalConfig } from '../lib/api';
+import { api, GlobalConfig, ImportPreview, ImportRouteRow, ImportResult } from '../lib/api';
+import { DRIFT_WARNING, errorMessage } from '../lib/messages';
+
+function ImportRows({ title, rows }: { title: string; rows: ImportRouteRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div>
+      <h3 class="font-medium text-slate-200 mb-2">{title} ({rows.length})</h3>
+      <div class="space-y-2">
+        {rows.map((row, i) => (
+          <div key={`${row.change_type}-${row.domain}-${row.path}-${row.handler_type}-${i}`} class="bg-slate-900/60 rounded p-3 text-sm">
+            <div class="flex items-center justify-between gap-3">
+              <span class="font-medium">{row.domain}{row.path ? ` ${row.path}` : ''}</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-slate-700">{row.support_status}</span>
+            </div>
+            <div class="text-slate-400 mt-1">{row.handler_type}{row.destination ? ` → ${row.destination}` : ''}</div>
+            {row.readonly_reason && <div class="text-amber-300 mt-1">{row.readonly_reason}</div>}
+            {row.raw_caddy_route && (
+              <details class="mt-2">
+                <summary class="cursor-pointer text-slate-300">View JSON</summary>
+                <pre class="mt-2 text-xs overflow-auto bg-black/30 rounded p-2">{JSON.stringify(row.raw_caddy_route, null, 2)}</pre>
+              </details>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function Settings() {
   const [loading, setLoading] = useState(true);
@@ -9,6 +37,8 @@ export function Settings() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; latency?: number; error?: string } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   const [config, setConfig] = useState<GlobalConfig>({
     caddy_admin_url: 'http://localhost:2019',
@@ -19,8 +49,8 @@ export function Settings() {
     try {
       const { config: cfg } = await api.getConfig();
       setConfig(cfg);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -41,8 +71,8 @@ export function Settings() {
       await api.sync();
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -54,8 +84,8 @@ export function Settings() {
     try {
       const result = await api.testConnection(config.caddy_admin_url);
       setTestResult(result);
-    } catch (err: any) {
-      setTestResult({ success: false, error: err.message });
+    } catch (err: unknown) {
+      setTestResult({ success: false, error: errorMessage(err) });
     } finally {
       setTesting(false);
     }
@@ -64,16 +94,27 @@ export function Settings() {
   async function handleImport() {
     setImporting(true);
     setError(null);
+    setImportResult(null);
+    setImportPreview(null);
     try {
-      const preview = await api.previewImport();
-      if (confirm(`Found ${preview.count} routes in Caddy.\n\nWARNING: This will DELETE all local routes and replace them with the configuration from Caddy.\n\nAre you sure you want to proceed?`)) {
-        const result = await api.importFromCaddy();
-        setSuccess(true);
-        setTimeout(() => setSuccess(false), 3000);
-        alert(`Successfully imported ${result.imported} routes.`);
-      }
-    } catch (err: any) {
-      setError("Import failed: " + err.message);
+      setImportPreview(await api.previewImport());
+    } catch (err: unknown) {
+      setError("Import preview failed: " + errorMessage(err));
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function confirmImport() {
+    setImporting(true);
+    setError(null);
+    try {
+      const result = await api.importFromCaddy();
+      setImportResult(result);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: unknown) {
+      setError("Import failed: " + errorMessage(err));
     } finally {
       setImporting(false);
     }
@@ -107,7 +148,7 @@ export function Settings() {
         {/* Caddy Connection */}
         <div class="card">
           <h2 class="text-lg font-semibold mb-4">Caddy Connection</h2>
-          
+
           <div>
             <label class="label">Caddy Admin API URL</label>
             <input
@@ -127,7 +168,7 @@ export function Settings() {
             <button type="button" onClick={testConnection} disabled={testing} class="btn btn-secondary">
               {testing ? 'Testing...' : 'Test Connection'}
             </button>
-            
+
             {testResult && (
               <div class={`flex items-center gap-2 text-sm ${testResult.success ? 'text-green-400' : 'text-red-400'}`}>
                 {testResult.success ? (
@@ -143,7 +184,7 @@ export function Settings() {
         {/* Compression */}
         <div class="card">
           <h2 class="text-lg font-semibold mb-4">Response Compression</h2>
-          
+
           <label class="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -172,29 +213,62 @@ export function Settings() {
         {/* Configuration Sync */}
         <div class="card">
           <h2 class="text-lg font-semibold mb-4">Configuration Import</h2>
-          
+
           <div class="mb-4 text-sm text-slate-400">
-            Import configuration from the running Caddy instance. 
-            <div class="mt-2 p-3 bg-red-900/20 border border-red-900/50 rounded text-red-200">
-              <strong>Warning:</strong> This will overwrite all local routes with the ones found in Caddy.
-              Any routes in Caddy that are not fully supported by this UI will be preserved but may not be fully editable.
+            Import configuration from the running Caddy instance.
+            <div class="mt-2 p-3 bg-amber-900/20 border border-amber-900/50 rounded text-amber-200">
+              <strong>Warning:</strong> Confirming import replaces all local routes. Unsupported Caddy routes are preserved read-only.
+              <div class="mt-2">{DRIFT_WARNING}</div>
             </div>
           </div>
 
-          <button 
-            type="button" 
-            onClick={handleImport}
-            disabled={importing}
-            class="btn bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200"
-          >
-            {importing ? 'Importing...' : 'Import from Caddy'}
-          </button>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={importing}
+              class="btn bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200"
+            >
+              {importing ? 'Loading preview...' : 'Review Import from Caddy'}
+            </button>
+            {importPreview && (
+              <button type="button" onClick={confirmImport} disabled={importing} class="btn btn-primary">
+                {importing ? 'Importing...' : 'Confirm Import'}
+              </button>
+            )}
+          </div>
+
+          {importResult && (
+            <div class="mt-4 p-3 bg-green-900/30 border border-green-800 rounded text-green-200 text-sm">
+              Imported {importResult.imported} routes ({importResult.editable} editable, {importResult.readonly_preserved} read-only preserved, {importResult.unsupported} unsupported).
+            </div>
+          )}
+
+          {importPreview && (
+            <div class="mt-6 space-y-5">
+              <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-center text-sm">
+                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold">{importPreview.summary.total_found}</div><div class="text-slate-400">Found</div></div>
+                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-green-300">{importPreview.summary.editable}</div><div class="text-slate-400">Editable</div></div>
+                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-blue-300">{importPreview.summary.will_update}</div><div class="text-slate-400">Will update</div></div>
+                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-amber-300">{importPreview.summary.readonly_preserved}</div><div class="text-slate-400">Read-only</div></div>
+                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-red-300">{importPreview.summary.unsupported}</div><div class="text-slate-400">Unsupported</div></div>
+                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold">{importPreview.summary.local_only}</div><div class="text-slate-400">Local-only removed</div></div>
+              </div>
+              {(importPreview.warnings || []).map((warning) => (
+                <div key={warning} class="p-3 bg-amber-900/20 border border-amber-900/50 rounded text-amber-200 text-sm">{warning}</div>
+              ))}
+              <ImportRows title="New from Caddy" rows={importPreview.groups.new_from_caddy} />
+              <ImportRows title="Will update" rows={importPreview.groups.will_update} />
+              <ImportRows title="Read-only preserved" rows={importPreview.groups.readonly_preserved} />
+              <ImportRows title="Local-only routes removed on confirm" rows={importPreview.groups.local_only} />
+            </div>
+          )}
         </div>
 
         {/* About */}
         <div class="card">
           <h2 class="text-lg font-semibold mb-4">About</h2>
-          
+
           <div class="space-y-2 text-sm text-slate-400">
             <div>
               <span class="text-slate-300">Caddy Admin UI</span>
