@@ -188,26 +188,6 @@ func routeRow(route *storage.Route, changeType string) importRouteRow {
 	return row
 }
 
-func validateImportedRoutes(routes []*storage.Route) error {
-	for _, route := range routes {
-		if route.SupportStatus == "" {
-			route.SupportStatus = storage.SupportStatusEditable
-		}
-		if route.IsReadOnly() {
-			route.ReadOnly = true
-			if len(route.RawCaddyRoute) == 0 {
-				return fmt.Errorf("read-only route is missing preserved raw config")
-			}
-			if route.ReadOnlyReason == "" {
-				return fmt.Errorf("read-only route is missing a reason")
-			}
-		} else if route.Domain == "" || route.HandlerType == "" || len(route.Config) == 0 {
-			return fmt.Errorf("editable route is incomplete")
-		}
-	}
-	return nil
-}
-
 func preserveMatchingLocalIDs(routes, localRoutes []*storage.Route) {
 	locals := map[string]*storage.Route{}
 	for _, route := range localRoutes {
@@ -288,9 +268,6 @@ func fetchParsedCaddyRoutes(h *Handler) ([]*storage.Route, int, error) {
 	routes, err := config.ParseCaddyConfig(&caddyConfig)
 	if err != nil {
 		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse Caddy config")
-	}
-	if err := validateImportedRoutes(routes); err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to validate Caddy routes: %w", err)
 	}
 	if err := config.ValidateRoutesForBuild(routes); err != nil {
 		return nil, http.StatusInternalServerError, fmt.Errorf("failed to validate Caddy routes: %w", err)

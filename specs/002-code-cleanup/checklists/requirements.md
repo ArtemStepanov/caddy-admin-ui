@@ -1,7 +1,7 @@
 # Specification Quality Checklist: Code Cleanup
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-07-05
+**Created**: 2026-07-09
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -31,4 +31,4 @@
 
 ## Notes
 
-- Initial scope intentionally starts with review-confirmed cleanup findings and can be refined later with `/speckit.clarify`.
+- Validation passed on the first review. Scope is limited to imported-route safety decisions and route-kind configuration isolation; broader cleanup candidates remain excluded.

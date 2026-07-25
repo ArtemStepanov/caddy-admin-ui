@@ -1139,3 +1139,110 @@ func TestCreateRoute_WithHeaders(t *testing.T) {
 		t.Errorf("Expected status %d, got %d. Body: %s", http.StatusCreated, w.Code, w.Body.String())
 	}
 }
+
+// TestImportRouteDecisionOutcomes asserts the single post-parse safety gate returns
+// one consistent accept (editable), preserve (read-only with raw content), or reject
+// (invalid) decision for every imported-route case, and that rejection leaves local
+// routes unchanged. Covers SC-001/SC-002 for the import endpoint.
+func TestImportRouteDecisionOutcomes(t *testing.T) {
+	cases := []struct {
+		name        string
+		config      string
+		wantStatus  int
+		editable    int // expected accept count (0 if not an accept)
+		preserved   int // expected readonly_preserved count (0 if not a preserve)
+		unsupported int // expected unsupported subset count
+	}{
+		{
+			name:       "editable route accepted",
+			config:      `{"apps":{"http":{"servers":{"srv0":{"routes":[{"match":[{"host":["ed.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"localhost:8080"}]}]}]}}}}}`,
+			wantStatus:  http.StatusOK,
+			editable:   1,
+			preserved:  0,
+		},
+		{
+			name:       "partially supported route preserved read-only",
+			config:      `{"apps":{"http":{"servers":{"srv0":{"routes":[{"match":[{"host":["partial.example.com"]}],"handle":[{"handler":"file_server"},{"handler":"vars","root":"/srv"}]}]}}}}}`,
+			wantStatus:  http.StatusOK,
+			preserved:  1,
+		},
+		{
+			name:       "unsupported route preserved read-only",
+			config:      `{"apps":{"http":{"servers":{"srv0":{"routes":[{"match":[{"host":["unsup.example.com"]}],"handle":[{"handler":"custom_handler","secret":"keep"}]}]}}}}}`,
+			wantStatus:  http.StatusOK,
+			preserved:  1,
+			unsupported: 1,
+		},
+		{
+			// Legacy-preserved routes (DB backfill target) share the same partial_readonly
+			// preserve outcome; a dynamic-upstreams proxy is the parser's preserve case
+			// that retains raw content and a read-only reason.
+			name:       "legacy-preserved route retained read-only with raw content",
+			config:      `{"apps":{"http":{"servers":{"srv0":{"routes":[{"match":[{"host":["legacy.example.com"]}],"handle":[{"handler":"reverse_proxy","dynamic_upstreams":{"source":"srv"}}]}]}}}}}`,
+			wantStatus:  http.StatusOK,
+			preserved:  1,
+		},
+		{
+			name:       "invalid editable route rejected before local replacement",
+			config:      `{"apps":{"http":{"servers":{"srv0":{"routes":[{"match":[{"host":["broken.example.com"]}],"handle":[{"handler":"reverse_proxy"}]}]}}}}}`,
+			wantStatus:  http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router, store, cleanup := setupTestRouter(t)
+			defer cleanup()
+			server := caddyConfigServer(t, http.StatusOK, tc.config)
+			defer server.Close()
+			_ = store.SetGlobalConfig(&storage.GlobalConfig{CaddyAdminURL: server.URL, EnableEncode: true})
+			local := &storage.Route{Domain: "keep.example.com", HandlerType: "file_server", Config: json.RawMessage(`{}`), Enabled: true}
+			if err := store.CreateRoute(local); err != nil {
+				t.Fatal(err)
+			}
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest("POST", "/api/import", nil))
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status %d want %d: %s", w.Code, tc.wantStatus, w.Body.String())
+			}
+
+			if tc.wantStatus == http.StatusOK {
+				var resp map[string]any
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					t.Fatal(err)
+				}
+				if int(resp["editable"].(float64)) != tc.editable {
+					t.Fatalf("editable=%v want %d", resp["editable"], tc.editable)
+				}
+				if int(resp["readonly_preserved"].(float64)) != tc.preserved {
+					t.Fatalf("readonly_preserved=%v want %d", resp["readonly_preserved"], tc.preserved)
+				}
+				if tc.unsupported > 0 && int(resp["unsupported"].(float64)) != tc.unsupported {
+					t.Fatalf("unsupported=%v want %d", resp["unsupported"], tc.unsupported)
+				}
+			}
+
+			if tc.preserved > 0 {
+				got, _ := store.ListRoutes()
+				var preserved *storage.Route
+				for _, r := range got {
+					if r.IsReadOnly() && len(r.RawCaddyRoute) > 0 && r.ReadOnlyReason != "" {
+					preserved = r
+					break
+				}
+				}
+				if preserved == nil {
+					t.Fatalf("no preserved read-only route with raw content and reason: %+v", got)
+				}
+			}
+
+			if tc.wantStatus == http.StatusInternalServerError {
+				got, _ := store.ListRoutes()
+				if len(got) != 1 || got[0].ID != local.ID {
+					t.Fatalf("rejected import changed local routes: %+v", got)
+				}
+			}
+		})
+	}
+}

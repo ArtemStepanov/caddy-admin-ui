@@ -62,7 +62,7 @@ export function RouteForm({ id }: RouteFormProps) {
       const routeData = {
         domain,
         path: path || undefined,
-        strip_path_prefix: stripPathPrefix || undefined,
+        strip_path_prefix: handlerType === 'reverse_proxy' ? (stripPathPrefix || undefined) : undefined,
         handler_type: handlerType,
         config,
         headers,
@@ -84,6 +84,7 @@ export function RouteForm({ id }: RouteFormProps) {
 
   function handleHandlerTypeChange(type: string) {
     setHandlerType(type);
+    setStripPathPrefix('');
     switch (type) {
       case 'reverse_proxy':
         setConfig({ upstreams: [], websocket: false, headers: {}, load_balancing: 'round_robin' });
@@ -141,7 +142,7 @@ export function RouteForm({ id }: RouteFormProps) {
         {/* Domain & Path */}
         <div class="card">
           <h2 class="text-lg font-semibold mb-4">Domain Configuration</h2>
-          
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="label">Domain *</label>
@@ -157,7 +158,7 @@ export function RouteForm({ id }: RouteFormProps) {
                 The domain name for this route (without https://)
               </p>
             </div>
-            
+
             <div>
               <label class="label">Path (Optional)</label>
               <input
@@ -173,8 +174,8 @@ export function RouteForm({ id }: RouteFormProps) {
             </div>
           </div>
 
-          {/* Strip Path Prefix - only show when path is set */}
-          {path && (
+          {/* Strip Path Prefix */}
+          {path && handlerType === 'reverse_proxy' && (
             <div class="mt-4">
               <label class="label">Strip Path Prefix (Optional)</label>
               <input
@@ -214,11 +215,10 @@ export function RouteForm({ id }: RouteFormProps) {
                 key={type.id}
                 type="button"
                 onClick={() => handleHandlerTypeChange(type.id)}
-                class={`card text-left transition-all ${
-                  handlerType === type.id
-                    ? 'ring-2 ring-primary-500 border-primary-500'
-                    : 'hover:border-slate-600'
-                }`}
+                class={`card text-left transition-all ${handlerType === type.id
+                  ? 'ring-2 ring-primary-500 border-primary-500'
+                  : 'hover:border-slate-600'
+                  }`}
                 disabled={readOnly}
               >
                 <div class="text-2xl mb-2">{type.icon}</div>
@@ -256,7 +256,7 @@ export function RouteForm({ id }: RouteFormProps) {
             <h2 class="text-lg font-semibold">Response Headers (Optional)</h2>
             <span class="text-slate-400">{showHeaders ? '▼' : '▶'}</span>
           </button>
-          
+
           {showHeaders && (
             <div class="mt-4">
               <HeaderEditor config={headers} onChange={setHeaders} />
@@ -321,7 +321,7 @@ function ReverseProxyConfig({ config, onChange }: { config: any; onChange: (c: a
         <p class="text-sm text-slate-500 mb-2">
           Enter the address of your backend service (e.g., localhost:8080, 10.0.0.5:3000)
         </p>
-        
+
         <div class="space-y-2 mb-2">
           {(config.upstreams || []).map((upstream: string, index: number) => (
             <div key={index} class="flex items-center gap-2">
@@ -533,7 +533,7 @@ function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any
         <p class="text-sm text-slate-500 mb-2">
           Files to look for when a directory is requested (default: index.html)
         </p>
-        
+
         <div class="space-y-2 mb-2">
           {(config.index || []).map((file: string, index: number) => (
             <div key={index} class="flex items-center gap-2">
@@ -564,7 +564,7 @@ function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any
         <p class="text-sm text-slate-500 mb-2">
           Files or patterns to hide from directory listings and direct access
         </p>
-        
+
         <div class="space-y-2 mb-2">
           {(config.hide || []).map((pattern: string, index: number) => (
             <div key={index} class="flex items-center gap-2">
