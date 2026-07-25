@@ -54,6 +54,7 @@ vendor/
 .cache/
 
 # Temporary files
+*.pyc
 tmp/
 temp/
 

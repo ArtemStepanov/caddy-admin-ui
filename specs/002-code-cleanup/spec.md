@@ -2,112 +2,90 @@
 
 **Feature Branch**: `main`
 
-**Created**: 2026-07-05
+**Created**: 2026-07-09
 
-**Status**: Draft
+**Status**: Implemented
 
-**Input**: User description: "separate spec to address #7 #8 and other code cleanups. for now start with obvious places, we will refine it later. i dont want to forget about these findings."
-
-## Clarifications
-
-### Session 2026-07-05
-
-- Q: What should this cleanup spec be named? → A: code-cleanup
+**Input**: User description: "we are alreadt on spec 002, but i need you to use ponytail and other lsp/best practices to narrow the cleanup scope in the current codebase. we have backend on go and FE on react. go ahead, and lets improve the spec."
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Consistent read-only route behavior (Priority: P1)
+### User Story 1 - Safe import validation (Priority: P1)
 
-As a maintainer reviewing or changing route safety behavior, I want read-only route decisions to be defined once and applied consistently, so routes cannot be treated as editable in one place and protected in another.
+As an operator importing server configuration, I want every imported route to receive one consistent safety decision, so valid routes import and preserved routes remain protected without conflicting checks.
 
-**Why this priority**: Inconsistent read-only decisions can create unsafe mutations, confusing UI behavior, or sync failures. This is the highest-risk cleanup from the review findings.
+**Why this priority**: Import decisions can affect live traffic and configuration preservation. This is the smallest high-risk cleanup with direct operator value.
 
-**Independent Test**: Can be fully tested by creating representative editable, partially read-only, unsupported read-only, and legacy preserved routes, then verifying every user-facing and mutation-protection path classifies each route the same way.
+**Independent Test**: Can be fully tested by importing editable, partially supported, unsupported, legacy-preserved, and invalid routes and verifying each receives the expected accept, preserve, or reject outcome.
 
 **Acceptance Scenarios**:
 
-1. **Given** a route is classified as read-only, **When** the route appears in route lists, mutation controls, sync validation, and technical details, **Then** every area treats it as read-only.
-2. **Given** a route is classified as editable, **When** the same areas inspect it, **Then** none of them block it solely because of stale or conflicting read-only metadata.
-3. **Given** a future cleanup changes the read-only rule, **When** the shared rule is updated, **Then** all affected behavior uses the updated rule without separate copy changes.
+1. **Given** an imported route is editable and complete, **When** it is reviewed for import, **Then** it is accepted exactly once and remains editable.
+2. **Given** an imported route must be preserved, **When** it is reviewed for import, **Then** its original content and its non-mutable status are retained.
+3. **Given** an imported route is incomplete or unsafe to process, **When** it is reviewed for import, **Then** import stops before replacing local routes and reports an actionable error.
 
 ---
 
-### User Story 2 - Single drift warning message (Priority: P2)
+### User Story 2 - Mode-safe route editing (Priority: P2)
 
-As an operator using import and sync screens, I want manual Caddy drift guidance to appear once in each relevant context with consistent wording, so I receive clear safety guidance without duplicate or conflicting messages.
+As an operator creating or editing a supported route, I want each route kind to expose and save only its applicable settings, so switching route kinds cannot carry incompatible settings into the saved route.
 
-**Why this priority**: Duplicate warnings reduce trust and make future copy changes error-prone, but the cleanup is lower risk than route safety classification.
+**Why this priority**: This narrows the client-side cleanup to the form's existing supported route kinds, improving maintainability without adding route capabilities.
 
-**Independent Test**: Can be fully tested by viewing import preview, import results, and sync guidance areas and confirming the warning appears once per context with the same approved wording.
-
-**Acceptance Scenarios**:
-
-1. **Given** the user opens an import or sync area, **When** manual drift guidance is shown, **Then** the wording is consistent across surfaces.
-2. **Given** the backend or frontend provides a drift warning, **When** the page renders it, **Then** the user does not see the same sentence twice in the same section.
-3. **Given** the warning wording changes later, **When** maintainers update the approved message, **Then** all relevant surfaces can be verified from one expected copy source or one documented contract.
-
----
-
-### User Story 3 - Remove redundant cleanup debt (Priority: P3)
-
-As a maintainer, I want obvious duplicated or redundant cleanup findings recorded and addressed in a bounded pass, so cleanup work does not get forgotten or grow into speculative refactoring.
-
-**Why this priority**: These cleanups improve maintainability but should not expand beyond review-confirmed duplication and redundant behavior.
-
-**Independent Test**: Can be fully tested by reviewing the cleanup candidate list before and after the change and confirming each candidate is either removed, consolidated, or explicitly deferred with rationale.
+**Independent Test**: Can be fully tested by creating, editing, and switching among every supported route kind, then verifying saved settings match the selected kind and the existing route behavior is unchanged.
 
 **Acceptance Scenarios**:
 
-1. **Given** a cleanup candidate duplicates an existing validation or summary calculation, **When** the cleanup is completed, **Then** only one necessary source of the behavior remains.
-2. **Given** repeated test setup or expected data makes tests harder to maintain, **When** the cleanup is completed, **Then** repeated setup is reduced without weakening test coverage.
-3. **Given** a candidate is not worth changing now, **When** the cleanup pass completes, **Then** the candidate is documented as intentionally deferred instead of silently forgotten.
+1. **Given** an operator selects a supported route kind, **When** the editor is displayed, **Then** it shows only the settings applicable to that kind.
+2. **Given** an operator switches route kinds before saving, **When** the route is saved, **Then** settings from the previous kind are not included.
+3. **Given** an operator opens a preserved read-only route, **When** it is viewed, **Then** it remains non-mutable and its preserved content is not interpreted as an editable route.
 
 ### Edge Cases
 
-- A cleanup candidate looks duplicated but protects a distinct edge case; it should be documented and left intact.
-- A copy consolidation could accidentally remove user-visible guidance from one surface; the affected screen must still show the warning where required.
-- A read-only classification cleanup could change behavior for legacy or partially imported routes; representative legacy and imported route cases must be checked.
-- A cleanup pass could grow into broad refactoring; work must stay limited to review-confirmed candidates and obvious nearby duplication.
+- A legacy preserved route has incomplete metadata but retains original route content; it must remain protected rather than become editable during cleanup.
+- A route changes kind after settings have been entered; incompatible settings must not survive the switch.
+- An imported route passes one former check but fails another; the unified decision must reject it before local routes are replaced.
+- A proposed cleanup does not directly improve either import safety or route-kind isolation; it must be left out of this feature.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST use one consistent read-only route classification rule across route display, mutation prevention, route details, import handling, and sync validation.
-- **FR-002**: Read-only classification behavior MUST remain unchanged for supported, partially supported, unsupported, and legacy preserved routes unless a separate safety fix explicitly requires the change.
-- **FR-003**: Manual Caddy drift warning copy MUST be consistent across import and sync guidance surfaces.
-- **FR-004**: The same manual Caddy drift warning MUST NOT be rendered twice in the same visible context.
-- **FR-005**: Redundant import validation, summary calculation, or route-safety checks MUST be consolidated when they do not protect distinct behavior.
-- **FR-006**: Cleanup of duplicated test setup or expected data MUST preserve coverage for import preview, read-only route behavior, and drift warning visibility.
-- **FR-007**: The cleanup pass MUST record any reviewed candidate that is intentionally not changed, including the reason it remains separate.
-- **FR-008**: The cleanup pass MUST NOT add new user-facing features, new dependencies, new route editing capabilities, or broader import behavior changes.
+- **FR-001**: The system MUST make one authoritative safety decision for each imported route before local routes can be replaced.
+- **FR-002**: The authoritative import decision MUST accept complete editable routes, preserve non-editable routes with their original content and reason, and reject incomplete or unsafe routes with an actionable error.
+- **FR-003**: Existing legacy and unsupported routes MUST retain their non-mutable status and original content throughout import, viewing, and synchronization.
+- **FR-004**: For every supported route kind, the route editor MUST present and save only settings applicable to the selected kind.
+- **FR-005**: Changing a route kind before save MUST discard settings that are not applicable to the newly selected kind.
+- **FR-006**: Preserved read-only routes MUST remain outside editable route configuration handling.
+- **FR-007**: Automated checks MUST cover all supported route kinds and imported editable, partially supported, unsupported, legacy-preserved, and invalid route cases.
+- **FR-008**: This cleanup MUST be limited to import-route validation and route-editor configuration isolation; it MUST NOT add route kinds, user-facing features, warning-copy changes, dashboard changes, or unrelated restructuring.
 
 ### Constitution Requirements *(mandatory for affected features)*
 
-- **CR-001**: Because the cleanup touches route import, sync, and read-only behavior, it MUST preserve unsupported or unknown Caddy configuration and MUST NOT weaken read-only protection.
-- **CR-002**: Because the cleanup touches admin UI/API behavior, it MUST preserve existing input validation, authentication assumptions, and secret-handling expectations.
-- **CR-003**: Because the cleanup touches sync-related behavior and warnings, it MUST preserve user-visible recovery guidance when sync or import state is uncertain.
+- **CR-001**: The cleanup MUST preserve unsupported or unknown route configuration unless an operator explicitly deletes or replaces it.
+- **CR-002**: Existing input validation, authentication behavior, and secret-handling expectations MUST remain unchanged.
+- **CR-003**: If local persistence succeeds while synchronization fails, the existing user-visible warning and recovery guidance MUST remain available and unchanged.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Cleanup Candidate**: A known duplicated, redundant, or inconsistent behavior identified during review, with a decision to consolidate, leave intact, or defer.
-- **Read-only Route Classification**: The shared decision of whether a route is safe to mutate through the app or must remain preserved and non-mutating.
-- **Manual Drift Warning**: The approved user-facing guidance that manual Caddy edits are not automatically merged and import review should be rerun before syncing.
-- **Deferred Cleanup**: A reviewed candidate intentionally left for later with a short reason, so it is not rediscovered as forgotten debt.
+- **Imported Route Decision**: The single result that classifies an imported route as editable, preserved, or rejected before import is committed.
+- **Preserved Route**: A route whose original content is retained because it is unsupported, only partially supported, or otherwise unsafe to edit.
+- **Route Kind**: One of the currently supported operator-selectable route behaviors, with its own applicable configuration settings.
+- **Route Configuration**: The settings saved for the selected route kind.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: 100% of covered route safety scenarios produce the same read-only/editable decision across all checked user-facing and mutation-protection areas.
-- **SC-002**: The manual drift warning appears no more than once in each relevant visible context during review.
-- **SC-003**: At least the two originally reported cleanup findings are either completed or explicitly deferred with rationale.
-- **SC-004**: No existing import, sync, or read-only route safety checks lose coverage during the cleanup pass.
-- **SC-005**: Reviewers can identify the remaining cleanup candidates and their status within 5 minutes using the feature artifacts or resulting notes.
+- **SC-001**: 100% of covered imported-route cases receive the same accept, preserve, or reject outcome wherever import safety is evaluated.
+- **SC-002**: 100% of covered preserved and legacy route cases retain their original content and non-mutable status after import and synchronization checks.
+- **SC-003**: For each currently supported route kind, 100% of create, edit, and kind-switch checks save only settings applicable to the selected kind.
+- **SC-004**: All existing automated checks pass, and the new focused checks fail if import safety decisions or route-kind isolation regress.
+- **SC-005**: A maintainer can confirm the two in-scope cleanup areas and the explicit exclusions from this specification in under 3 minutes.
 
 ## Assumptions
 
-- This is an overall maintenance and debt-tracking feature, not a user-facing feature expansion.
-- The first cleanup pass starts with the confirmed review findings: read-only predicate duplication, duplicate drift warning copy/rendering, redundant import validation, redundant summary calculation, and obvious duplicated test setup.
-- Behavior-preserving consolidation is preferred; any behavior change belongs in the active safe-import PR tasks or a separate bug-fix spec.
-- No new runtime dependency or architectural layer is justified for this cleanup.
+- This revision replaces the original broad cleanup backlog; planning for this pass uses only the bounded scope in this specification.
+- The reviewed codebase identifies two justified cleanup targets: overlapping imported-route safety checks and unbounded editable-route configuration state.
+- The current supported route kinds and operator-facing behavior remain unchanged.
+- Simpler consolidation is preferred over new layers, shared infrastructure, or a repository-wide cleanup.
