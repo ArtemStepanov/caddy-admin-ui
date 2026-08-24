@@ -1,5 +1,7 @@
 # Feature Specification: Code Cleanup
 
+> **Archived:** This specification records an earlier cleanup milestone. References to the legacy import endpoints are superseded by the managed setup and ownership flow documented in the root README.
+
 **Feature Branch**: `main`
 
 **Created**: 2026-07-09

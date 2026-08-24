@@ -1,0 +1,26 @@
+{
+  "name": "Caddy Admin UI PR preview",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:4": {}
+  },
+  "forwardPorts": [3000, 8080],
+  "portsAttributes": {
+    "3000": {
+      "label": "Caddy Admin UI",
+      "onAutoForward": "openBrowser",
+      "visibility": "private"
+    },
+    "8080": {
+      "label": "Caddy data plane",
+      "onAutoForward": "notify",
+      "visibility": "private"
+    }
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "4gb"
+  },
+  "postCreateCommand": ".devcontainer/start-preview.sh --build",
+  "postStartCommand": ".devcontainer/start-preview.sh"
+}

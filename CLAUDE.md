@@ -6,7 +6,7 @@ Caddy Admin UI is a web UI for managing Caddy server routes without manually edi
 
 ### Prerequisites
 
-Go and GCC are installed via Homebrew. Node.js 25.3.0 is managed by `mise.toml`.
+Go 1.25.13 and Node.js 24 are managed by `mise.toml`. GCC is required for CGO/SQLite builds.
 
 ### Common Commands
 
@@ -22,6 +22,8 @@ Go and GCC are installed via Homebrew. Node.js 25.3.0 is managed by `mise.toml`.
 | `make clean` | Remove build artifacts (`bin/`, `web/dist/`, `web/node_modules/`) |
 | `make logs` | Tail Docker Compose logs |
 | `make docker-up-build` | Build image and start Docker Compose stack |
+| `make preview` / `make preview-down` | Build/start or remove the disposable loopback preview stack |
+| `./scripts/preview-pr <number>` | Preview a PR in an isolated temporary git worktree |
 
 ### Running Individual Tests
 
@@ -48,10 +50,11 @@ cd web && npx tsc --noEmit            # type-check only
 | `CADDY_ADMIN_URL` | `http://localhost:2019` | Caddy Admin API endpoint |
 | `DB_PATH` | `/app/data/routes.db` | SQLite database path |
 | `LISTEN_ADDR` | `127.0.0.1:3000` | Server listen address (loopback by default) |
-| `GIN_MODE` | `debug` | Gin framework mode |
+| `GIN_MODE` | `release` | Gin framework mode |
 | `WEB_DIR` | `./web/dist` | Frontend static files directory |
 | `ADMIN_USER` | _(empty, auth disabled)_ | Basic Auth username |
 | `ADMIN_PASSWORD` | _(empty, auth disabled)_ | Basic Auth password |
+| `ALLOW_INSECURE_NO_AUTH` | `false` | Explicitly allow an unauthenticated non-loopback listener |
 
 ## Commit Conventions
 
@@ -74,11 +77,11 @@ Frontend (Preact/TS)  ──/api/*──►  Go Backend (Gin)  ──HTTP──�
 
 ### Backend (`internal/`)
 
-- **`api/`** — HTTP handlers and route definitions. All mutation endpoints (create/update/delete/toggle) auto-sync to Caddy after persisting to SQLite. Sync failures return warnings but don't fail the request.
-- **`config/builder.go`** — Converts internal Route models into Caddy JSON config. Separate builder functions per handler type (reverse_proxy, file_server, redir). Injects encode middleware globally when enabled.
-- **`config/parser.go`** — Parses Caddy JSON config back into internal Route models for the import feature.
-- **`caddy/client.go`** — HTTP client for Caddy's Admin API (health, get/load/set config).
-- **`storage/`** — SQLite persistence layer with models. Routes store handler-specific config as `json.RawMessage` blobs. `RawCaddyRoute` field preserves unknown handlers during round-trip sync to prevent data loss.
+- **`api/`** — HTTP handlers, managed-server setup, serialized mutations, ETag drift checks, and snapshot restore/export.
+- **`config/builder.go`** — Builds only the managed Caddy route array. UI-owned routes receive stable `@id` markers; read-only routes are emitted unchanged.
+- **`config/parser.go`** — Parses a selected server's raw route array without narrowing unknown JSON. External routes remain read-only.
+- **`caddy/client.go`** — HTTP client for scoped Caddy config reads and ETag-guarded PATCH/PUT writes, including empty-Caddy bootstrap.
+- **`storage/`** — SQLite in WAL mode with route order, managed-server state, and immutable pre-write snapshots.
 
 ### Frontend (`web/src/`)
 
@@ -88,7 +91,10 @@ Frontend (Preact/TS)  ──/api/*──►  Go Backend (Gin)  ──HTTP──�
 
 ### Key Design Decisions
 
-1. **Raw route preservation**: Unknown Caddy handler types are stored in `RawCaddyRoute` and merged back during export, preventing data loss on round-trip.
-2. **Dynamic Caddy URL**: Configurable at runtime via GlobalConfig (stored in DB), falling back to `CADDY_ADMIN_URL` env var.
-3. **Preact over React**: Chosen for minimal bundle size with the same component model.
-4. **Tailwind CSS**: Utility-first CSS framework used for all frontend styling.
+1. **Scoped ownership**: The UI adopts one HTTP server after preview/confirmation and writes only its `routes` array. It never calls full-config `/load`.
+2. **Optimistic concurrency**: Every write uses the current route-array ETag with `If-Match`. Drift aborts before local persistence.
+3. **Raw route preservation**: Routes without a `caddy-admin-ui-route-*` ID are stored as exact raw JSON and remain read-only.
+4. **Recovery**: A snapshot of the live route array is persisted before every write; restore is also ETag-guarded.
+5. **Dynamic Caddy URL**: Configurable at runtime via GlobalConfig, falling back to `CADDY_ADMIN_URL`. Changing it clears setup ownership.
+6. **Preact and Tailwind CSS**: Keep the frontend small while using a familiar component and utility-class model.
+7. **Private manual previews**: Codespaces and the local worktree helper run the real two-container stack on demand. No PR deployment workflow or public Caddy Admin API is used.

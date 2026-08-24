@@ -15,17 +15,20 @@ go.mod @ArtemStepanov
 go.sum @ArtemStepanov
 
 # Frontend code
-/src/ @ArtemStepanov
+/web/src/ @ArtemStepanov
 *.ts @ArtemStepanov
 *.tsx @ArtemStepanov
 *.css @ArtemStepanov
-package.json @ArtemStepanov
-package-lock.json @ArtemStepanov
+/web/package.json @ArtemStepanov
+/web/package-lock.json @ArtemStepanov
 
 # CI/CD and DevOps
 /.github/ @ArtemStepanov
+/.devcontainer/ @ArtemStepanov
+/scripts/ @ArtemStepanov
 Dockerfile @ArtemStepanov
 docker-compose*.yml @ArtemStepanov
+compose*.yml @ArtemStepanov
 Makefile @ArtemStepanov
 
 # Documentation

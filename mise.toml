@@ -1,5 +1,6 @@
 [tools]
-node = "25.3.0"
+node = "24"
+go = "1.25.13"
 
 [settings]
 windows_shim_mode = "symlink"

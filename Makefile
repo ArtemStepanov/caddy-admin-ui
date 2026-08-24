@@ -1,4 +1,4 @@
-.PHONY: all build run dev docker clean test docker-up-build
+.PHONY: all build run dev docker clean test docker-up-build preview preview-down
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/ArtemStepanov/caddy-admin-ui/internal/version.Version=$(VERSION)
@@ -12,7 +12,7 @@ build:
 
 # Build frontend
 frontend:
-	cd web && npm install && npm run build
+	cd web && npm ci && npm run build
 
 # Run locally (development)
 dev:
@@ -38,13 +38,21 @@ docker-up-build:
 docker-down:
 	docker compose down
 
+# Run a disposable, loopback-only Admin UI + Caddy preview from this checkout
+preview:
+	docker compose -f compose.preview.yml up --build -d --wait --wait-timeout 300
+
+# Remove the disposable preview and all of its local data
+preview-down:
+	docker compose -f compose.preview.yml down --volumes --remove-orphans
+
 # View logs
 logs:
 	docker compose logs -f
 
 # Run tests
 test:
-	CGO_ENABLED=1 go test $$(go list ./... | grep -v '/web/node_modules/')
+	CGO_ENABLED=1 go test -race ./cmd/... ./internal/...
 	cd web && npm test -- run
 
 # Clean build artifacts
@@ -56,4 +64,4 @@ clean:
 # Install dependencies
 deps:
 	go mod download
-	cd web && npm install
+	cd web && npm ci

@@ -1,5 +1,7 @@
 # Feature Specification: Safe Import Preview
 
+> **Archived:** This specification records the original import-preview design. It has been superseded by the managed setup and ownership flow documented in the root README.
+
 **Feature Branch**: `docs/adopt-constitution-v1`
 
 **Created**: 2026-07-03

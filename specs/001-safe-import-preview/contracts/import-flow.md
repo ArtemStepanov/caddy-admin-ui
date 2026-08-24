@@ -1,5 +1,7 @@
 # Contract: Safe Import Flow
 
+> **Archived contract:** `/api/import-preview` and `/api/import` were replaced by `/api/setup/preview` and `/api/setup/confirm`. See the root README for the current API and safety model.
+
 ## POST /api/import-preview
 
 Builds a preview from the live Caddy configuration. Does not change local routes.

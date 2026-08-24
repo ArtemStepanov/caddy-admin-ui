@@ -23,9 +23,9 @@
 .editorconfig text
 Makefile text
 
-# Lock files (binary)
-package-lock.json binary
-go.sum binary
+# Lock files
+package-lock.json text
+go.sum text
 bun.lockb binary
 
 # Images

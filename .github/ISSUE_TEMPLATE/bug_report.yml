@@ -1,50 +1,39 @@
-name: 🐛 Bug Report
-description: Report a bug or unexpected behavior
-title: "[Bug]: "
-labels: ["bug"]
+name: Bug report
+description: Report reproducible incorrect behavior
+title: "bug: "
+labels: [bug]
 body:
-  - type: textarea
-    id: description
+  - type: markdown
     attributes:
-      label: Description
-      description: What happened and what did you expect?
+      value: Do not report security vulnerabilities here. Follow SECURITY.md instead.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: v0.2.0 or commit SHA
     validations:
       required: true
-
   - type: textarea
-    id: reproduction
+    id: topology
     attributes:
-      label: Steps to Reproduce
-      placeholder: |
-        1. Go to '...'
-        2. Click on '...'
-        3. See error
+      label: Deployment and Caddy topology
+      description: Include Docker/native setup, Caddy version, and whether the server was imported or bootstrapped.
     validations:
       required: true
-
-  - type: dropdown
-    id: component
+  - type: textarea
+    id: steps
     attributes:
-      label: Component
-      options:
-        - Backend (Go)
-        - Frontend (React)
-        - Docker/Deployment
-        - Other
+      label: Reproduction steps
     validations:
       required: true
-
   - type: textarea
-    id: environment
+    id: expected
     attributes:
-      label: Environment
-      value: |
-        - OS: 
-        - Browser: 
-        - Deployment: Docker / Local
-
+      label: Expected and actual behavior
+    validations:
+      required: true
   - type: textarea
     id: logs
     attributes:
-      label: Logs
+      label: Relevant redacted logs or JSON
       render: shell

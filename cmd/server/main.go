@@ -2,6 +2,9 @@ package main
 
 import (
 	"log"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +24,7 @@ func main() {
 	adminUser := os.Getenv("ADMIN_USER")
 	adminPassword := os.Getenv("ADMIN_PASSWORD")
 
-	log.Printf("Starting Caddy Orchestrator Lite %s", version.Version)
+	log.Printf("Starting Caddy Admin UI %s", version.Version)
 	log.Printf("  Database: %s", dbPath)
 	log.Printf("  Default Caddy Admin URL: %s", caddyURL)
 	log.Printf("  Listen Address: %s", listenAddr)
@@ -38,6 +41,11 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.Default()
+	r.Use(securityHeaders())
+	r.Use(csrfProtection())
+	// Liveness intentionally reveals no Caddy or application state and remains
+	// available to the container health check when UI authentication is enabled.
+	r.GET("/healthz", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	// Fail fast if only one credential is set
 	if (adminUser == "") != (adminPassword == "") {
@@ -49,8 +57,15 @@ func main() {
 		r.Use(gin.BasicAuth(gin.Accounts{adminUser: adminPassword}))
 		log.Printf("  Basic Auth: enabled")
 	} else if !isLoopback(listenAddr) {
-		log.Printf("  WARNING: No authentication configured on a non-loopback address")
+		if !strings.EqualFold(os.Getenv("ALLOW_INSECURE_NO_AUTH"), "true") {
+			log.Fatalf("Refusing unauthenticated non-loopback listener; configure ADMIN_USER and ADMIN_PASSWORD or explicitly set ALLOW_INSECURE_NO_AUTH=true")
+		}
+		log.Printf("  WARNING: unauthenticated non-loopback access explicitly enabled")
 	}
+
+	// Readiness verifies the database and Caddy connection. Register it after
+	// optional Basic Auth so authenticated deployments do not expose an SSRF oracle.
+	r.GET("/readyz", api.NewReadinessHandler(store, caddyURL))
 
 	// Setup API routes
 	api.SetupRoutes(r, store, caddyURL)
@@ -84,6 +99,39 @@ func main() {
 	}
 }
 
+func securityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Content-Security-Policy", "default-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		c.Next()
+	}
+}
+
+func csrfProtection() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead || c.Request.Method == http.MethodOptions {
+			c.Next()
+			return
+		}
+		if c.GetHeader("X-Caddy-Admin-UI") != "1" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "missing CSRF protection header"})
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
+		if origin := c.GetHeader("Origin"); origin != "" {
+			parsed, err := url.Parse(origin)
+			if err != nil || !strings.EqualFold(parsed.Host, c.Request.Host) {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "cross-origin request rejected"})
+				return
+			}
+		}
+		c.Next()
+	}
+}
+
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -94,9 +142,14 @@ func getEnv(key, defaultValue string) string {
 // isLoopback checks if the listen address is bound to a loopback interface.
 // An empty host (e.g. ":3000") means all interfaces, which is NOT loopback.
 func isLoopback(addr string) bool {
-	host := addr
-	if i := strings.LastIndex(addr, ":"); i != -1 {
-		host = addr[:i]
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
 	}
-	return host == "127.0.0.1" || host == "::1" || host == "localhost"
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

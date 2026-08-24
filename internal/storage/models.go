@@ -34,6 +34,7 @@ type Route struct {
 	ReadOnlyReason  string          `json:"readonly_reason,omitempty"`
 	CreatedAt       time.Time       `json:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
+	Position        int             `json:"position"`
 
 	// ReadOnly routes are preserved but not mutated by the UI/API.
 	ReadOnly bool `json:"readonly,omitempty"`
@@ -50,7 +51,6 @@ type Route struct {
 type ReverseProxyConfig struct {
 	Upstreams     []string          `json:"upstreams"`
 	Headers       map[string]string `json:"headers,omitempty"`
-	WebSocket     bool              `json:"websocket,omitempty"`
 	LoadBalancing string            `json:"load_balancing,omitempty"`
 }
 
@@ -76,21 +76,21 @@ type HeaderConfig struct {
 	Delete []string          `json:"delete,omitempty"`
 }
 
-// BasicAuthConfig for basic_auth protection
-type BasicAuthConfig struct {
-	Enabled bool            `json:"enabled"`
-	Users   []BasicAuthUser `json:"users"`
-	Realm   string          `json:"realm,omitempty"`
-}
-
-// BasicAuthUser represents a user for basic auth
-type BasicAuthUser struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
 // GlobalConfig for settings that apply to all routes
 type GlobalConfig struct {
 	CaddyAdminURL string `json:"caddy_admin_url"`
 	EnableEncode  bool   `json:"enable_encode"`
+	ManagedServer string `json:"managed_server,omitempty"`
+	SetupComplete bool   `json:"setup_complete"`
+	LastETag      string `json:"last_etag,omitempty"`
+}
+
+// Snapshot is an immutable copy of the managed Caddy route array taken before a write.
+type Snapshot struct {
+	ID        string          `json:"id"`
+	Server    string          `json:"server"`
+	ETag      string          `json:"etag"`
+	Routes    json.RawMessage `json:"routes,omitempty"`
+	Reason    string          `json:"reason"`
+	CreatedAt time.Time       `json:"created_at"`
 }

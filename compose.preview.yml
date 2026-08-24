@@ -1,0 +1,67 @@
+name: caddy-admin-ui-preview
+
+services:
+  admin-ui:
+    image: ${PREVIEW_IMAGE:-caddy-admin-ui:preview}
+    build:
+      context: ${PREVIEW_SOURCE_DIR:-.}
+      args:
+        VERSION: ${PREVIEW_VERSION:-preview}
+    ports:
+      - "127.0.0.1:${PREVIEW_UI_PORT:-3000}:3000"
+    environment:
+      CADDY_ADMIN_URL: http://caddy:2019
+      DB_PATH: /app/data/routes.db
+      GIN_MODE: release
+      LISTEN_ADDR: 0.0.0.0:3000
+      # The host port is loopback-only. In Codespaces, GitHub authentication
+      # additionally protects the private forwarded port.
+      ALLOW_INSECURE_NO_AUTH: "true"
+    volumes:
+      - admin-ui-preview-data:/app/data
+    depends_on:
+      caddy:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/readyz"]
+      interval: 5s
+      timeout: 12s
+      retries: 20
+      start_period: 10s
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    ports:
+      - "127.0.0.1:${PREVIEW_CADDY_PORT:-8080}:80"
+    volumes:
+      - caddy-preview-data:/data
+      - caddy-preview-config:/config
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    configs:
+      - source: preview-caddyfile
+        target: /etc/caddy/Caddyfile
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+configs:
+  preview-caddyfile:
+    content: |
+      {
+        admin 0.0.0.0:2019
+      }
+
+      :80 {
+        respond /healthz "ok" 200
+        respond /preview-seed "Caddy PR preview is running" 200
+      }
+
+volumes:
+  admin-ui-preview-data:
+  caddy-preview-data:
+  caddy-preview-config:

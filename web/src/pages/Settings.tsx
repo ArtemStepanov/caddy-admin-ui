@@ -1,54 +1,92 @@
-import { useState, useEffect } from 'preact/hooks';
-import { api, GlobalConfig, ImportPreview, ImportRouteRow, ImportResult } from '../lib/api';
-import { DRIFT_WARNING, errorMessage } from '../lib/messages';
+import { useEffect, useState } from "preact/hooks";
+import { api, GlobalConfig, SetupPreview, Snapshot } from "../lib/api";
+import { DRIFT_WARNING, errorMessage } from "../lib/messages";
 
-function ImportRows({ title, rows }: { title: string; rows: ImportRouteRow[] }) {
-  if (rows.length === 0) return null;
+function RoutePreview({ preview }: { preview: SetupPreview }) {
   return (
-    <div>
-      <h3 class="font-medium text-slate-200 mb-2">{title} ({rows.length})</h3>
-      <div class="space-y-2">
-        {rows.map((row, i) => (
-          <div key={`${row.change_type}-${row.domain}-${row.path}-${row.handler_type}-${i}`} class="bg-slate-900/60 rounded p-3 text-sm">
-            <div class="flex items-center justify-between gap-3">
-              <span class="font-medium">{row.domain}{row.path ? ` ${row.path}` : ''}</span>
-              <span class="text-xs px-2 py-0.5 rounded bg-slate-700">{row.support_status}</span>
-            </div>
-            <div class="text-slate-400 mt-1">{row.handler_type}{row.destination ? ` → ${row.destination}` : ''}</div>
-            {row.readonly_reason && <div class="text-amber-300 mt-1">{row.readonly_reason}</div>}
-            {row.raw_caddy_route && (
-              <details class="mt-2">
-                <summary class="cursor-pointer text-slate-300">View JSON</summary>
-                <pre class="mt-2 text-xs overflow-auto bg-black/30 rounded p-2">{JSON.stringify(row.raw_caddy_route, null, 2)}</pre>
-              </details>
-            )}
-          </div>
-        ))}
+    <div class="mt-5 space-y-4">
+      <div class="grid grid-cols-3 gap-3 text-center text-sm">
+        <div class="bg-slate-900/60 rounded p-3">
+          <div class="text-xl font-bold">{preview.route_count}</div>
+          <div class="text-slate-400">Routes</div>
+        </div>
+        <div class="bg-slate-900/60 rounded p-3">
+          <div class="text-xl font-bold text-green-300">{preview.editable}</div>
+          <div class="text-slate-400">UI-owned</div>
+        </div>
+        <div class="bg-slate-900/60 rounded p-3">
+          <div class="text-xl font-bold text-amber-300">{preview.readonly}</div>
+          <div class="text-slate-400">Preserved</div>
+        </div>
       </div>
+      <div class="p-3 bg-blue-900/20 border border-blue-800/60 rounded text-blue-200 text-sm">
+        {preview.ownership_notice}
+      </div>
+      {preview.caddy_empty && (
+        <div class="p-3 bg-amber-900/20 border border-amber-800/60 rounded text-amber-200 text-sm">
+          Caddy is empty. Confirmation will bootstrap one dedicated server on
+          ports 80 and 443.
+        </div>
+      )}
+      {preview.routes.length > 0 && (
+        <div class="max-h-64 overflow-auto space-y-2">
+          {preview.routes.map((route, index) => (
+            <div
+              key={`${route.id}-${index}`}
+              class="bg-slate-900/60 rounded p-3 text-sm flex items-center justify-between gap-3"
+            >
+              <div>
+                <span class="font-medium">{route.domain}</span>
+                {route.path && (
+                  <span class="text-slate-400"> {route.path}</span>
+                )}
+              </div>
+              <span
+                class={`text-xs px-2 py-0.5 rounded ${route.readonly ? "bg-amber-800/50 text-amber-200" : "bg-green-800/50 text-green-200"}`}
+              >
+                {route.readonly ? "preserved read-only" : "UI-owned"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {(preview.local_drafts || []).length > 0 && (
+        <div class="p-3 bg-slate-900/60 border border-slate-700 rounded text-slate-300 text-sm">
+          {preview.local_drafts.length} local UI-owned draft
+          {preview.local_drafts.length === 1 ? "" : "s"} will remain local and
+          apply only on the next guarded sync.
+        </div>
+      )}
     </div>
   );
 }
 
 export function Settings() {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; latency?: number; error?: string } | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
-
+  const [success, setSuccess] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    latency?: number;
+    error?: string;
+  } | null>(null);
+  const [preview, setPreview] = useState<SetupPreview | null>(null);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [config, setConfig] = useState<GlobalConfig>({
-    caddy_admin_url: 'http://localhost:2019',
+    caddy_admin_url: "http://localhost:2019",
     enable_encode: true,
+    setup_complete: false,
   });
 
-  async function loadConfig() {
+  async function refresh() {
     try {
-      const { config: cfg } = await api.getConfig();
-      setConfig(cfg);
+      const [{ config: current }, { snapshots: recent }] = await Promise.all([
+        api.getConfig(),
+        api.listSnapshots(),
+      ]);
+      setConfig(current);
+      setSnapshots(recent || []);
     } catch (err: unknown) {
       setError(errorMessage(err));
     } finally {
@@ -57,235 +95,295 @@ export function Settings() {
   }
 
   useEffect(() => {
-    loadConfig();
+    refresh();
   }, []);
 
-  async function handleSubmit(e: Event) {
+  async function saveSettings(e: Event) {
     e.preventDefault();
-    setSaving(true);
+    setBusy(true);
     setError(null);
-    setSuccess(false);
-
+    setSuccess(null);
     try {
-      await api.updateConfig(config);
-      await api.sync();
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      const { config: saved } = await api.updateConfig(config);
+      setConfig(saved);
+      setPreview(null);
+      setSuccess(
+        saved.setup_complete
+          ? "Settings saved."
+          : "Settings saved. Review and confirm Caddy ownership before syncing.",
+      );
     } catch (err: unknown) {
       setError(errorMessage(err));
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   }
 
   async function testConnection() {
-    setTesting(true);
+    setBusy(true);
     setTestResult(null);
     try {
-      const result = await api.testConnection(config.caddy_admin_url);
-      setTestResult(result);
+      setTestResult(await api.testConnection(config.caddy_admin_url));
     } catch (err: unknown) {
       setTestResult({ success: false, error: errorMessage(err) });
     } finally {
-      setTesting(false);
+      setBusy(false);
     }
   }
 
-  async function handleImport() {
-    setImporting(true);
+  async function reviewSetup(server?: string) {
+    setBusy(true);
     setError(null);
-    setImportResult(null);
-    setImportPreview(null);
+    setSuccess(null);
+    setPreview(null);
     try {
-      setImportPreview(await api.previewImport());
+      setPreview(await api.previewSetup(config.caddy_admin_url, server));
     } catch (err: unknown) {
-      setError("Import preview failed: " + errorMessage(err));
+      setError("Setup preview failed: " + errorMessage(err));
     } finally {
-      setImporting(false);
+      setBusy(false);
     }
   }
 
-  async function confirmImport() {
-    setImporting(true);
+  async function confirmSetup() {
+    if (!preview) return;
+    setBusy(true);
     setError(null);
     try {
-      const result = await api.importFromCaddy();
-      setImportResult(result);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      const result = await api.confirmSetup(preview);
+      setConfig(result.config);
+      setPreview(null);
+      setSuccess(
+        `Connected to ${result.config.managed_server}. Imported ${result.imported} routes.`,
+      );
+      await refresh();
     } catch (err: unknown) {
-      setError("Import failed: " + errorMessage(err));
+      setError("Setup confirmation failed: " + errorMessage(err));
     } finally {
-      setImporting(false);
+      setBusy(false);
     }
   }
 
-  if (loading) {
+  async function restoreSnapshot(snapshot: Snapshot) {
+    if (
+      !confirm(
+        `Restore routes from ${new Date(snapshot.created_at).toLocaleString()}?`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.restoreSnapshot(snapshot.id);
+      setSuccess(`Snapshot restored (${result.restored} routes).`);
+      await refresh();
+    } catch (err: unknown) {
+      setError("Restore failed: " + errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading)
     return (
-      <div class="text-center py-8">
-        <div class="text-slate-400">Loading settings...</div>
-      </div>
+      <div class="text-center py-8 text-slate-400">Loading settings...</div>
     );
-  }
 
   return (
-    <div class="max-w-2xl mx-auto">
-      <h1 class="text-2xl font-bold mb-6">Settings</h1>
-
+    <div class="max-w-3xl mx-auto space-y-6">
+      <h1 class="text-2xl font-bold">Settings</h1>
       {error && (
-        <div class="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-6 text-red-300">
+        <div class="bg-red-900/50 border border-red-700 rounded-lg p-4 text-red-300">
           {error}
         </div>
       )}
-
       {success && (
-        <div class="bg-green-900/50 border border-green-700 rounded-lg p-4 mb-6 text-green-300">
-          Settings saved and applied successfully!
+        <div class="bg-green-900/50 border border-green-700 rounded-lg p-4 text-green-300">
+          {success}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} class="space-y-6">
-        {/* Caddy Connection */}
-        <div class="card">
-          <h2 class="text-lg font-semibold mb-4">Caddy Connection</h2>
-
+      <form onSubmit={saveSettings} class="card space-y-5">
+        <div class="flex items-start justify-between gap-4">
           <div>
-            <label class="label">Caddy Admin API URL</label>
-            <input
-              type="url"
-              value={config.caddy_admin_url}
-              onInput={(e) => setConfig({ ...config, caddy_admin_url: (e.target as HTMLInputElement).value })}
-              placeholder="http://localhost:2019"
-              class="input"
-              required
-            />
-            <p class="text-sm text-slate-500 mt-1">
-              The URL of your Caddy server's admin API (default port is 2019)
+            <h2 class="text-lg font-semibold">Caddy Connection</h2>
+            <p class="text-sm text-slate-400 mt-1">
+              Connect explicitly, review the server, then confirm ownership.
             </p>
           </div>
-
-          <div class="flex gap-2 mt-4">
-            <button type="button" onClick={testConnection} disabled={testing} class="btn btn-secondary">
-              {testing ? 'Testing...' : 'Test Connection'}
-            </button>
-
-            {testResult && (
-              <div class={`flex items-center gap-2 text-sm ${testResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                {testResult.success ? (
-                  <>✓ Connected ({testResult.latency}ms)</>
-                ) : (
-                  <>✗ {testResult.error}</>
-                )}
-              </div>
-            )}
-          </div>
+          <span
+            class={`text-xs px-2 py-1 rounded ${config.setup_complete ? "bg-green-800/50 text-green-200" : "bg-amber-800/50 text-amber-200"}`}
+          >
+            {config.setup_complete
+              ? `Managing ${config.managed_server}`
+              : "Setup required"}
+          </span>
+        </div>
+        <div>
+          <label class="label">Caddy Admin API URL</label>
+          <input
+            type="url"
+            value={config.caddy_admin_url}
+            onInput={(e) =>
+              setConfig({
+                ...config,
+                caddy_admin_url: (e.target as HTMLInputElement).value,
+              })
+            }
+            placeholder="http://caddy:2019"
+            class="input"
+            required
+          />
+          <p class="text-sm text-slate-500 mt-1">
+            Changing this URL clears ownership; saving never writes to the new
+            Caddy instance.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2 items-center">
+          <button
+            type="button"
+            onClick={testConnection}
+            disabled={busy}
+            class="btn btn-secondary"
+          >
+            Test Connection
+          </button>
+          <button
+            type="button"
+            onClick={() => reviewSetup()}
+            disabled={busy}
+            class="btn btn-secondary"
+          >
+            Review Caddy Servers
+          </button>
+          <button type="submit" disabled={busy} class="btn btn-primary">
+            Save Settings
+          </button>
+          {testResult && (
+            <span
+              class={
+                testResult.success
+                  ? "text-green-400 text-sm"
+                  : "text-red-400 text-sm"
+              }
+            >
+              {testResult.success
+                ? `Connected (${testResult.latency}ms)`
+                : testResult.error}
+            </span>
+          )}
         </div>
 
-        {/* Compression */}
-        <div class="card">
-          <h2 class="text-lg font-semibold mb-4">Response Compression</h2>
-
-          <label class="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={config.enable_encode}
-              onChange={(e) => setConfig({ ...config, enable_encode: (e.target as HTMLInputElement).checked })}
-              class="w-5 h-5 rounded bg-slate-900 border-slate-700"
-            />
-            <div>
-              <div class="font-medium">Enable Compression</div>
-              <div class="text-sm text-slate-500">
-                Compress responses with gzip and zstd for faster loading
-              </div>
-            </div>
-          </label>
-
-          <div class="mt-4 bg-slate-800/50 rounded-lg p-4 text-sm">
-            <div class="font-medium text-slate-300 mb-2">About Compression</div>
-            <ul class="space-y-1 text-slate-400">
-              <li>• Reduces response size by 60-90% for text content</li>
-              <li>• Supports gzip (universal) and zstd (faster, newer)</li>
-              <li>• Automatically negotiates best format with browser</li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Configuration Sync */}
-        <div class="card">
-          <h2 class="text-lg font-semibold mb-4">Configuration Import</h2>
-
-          <div class="mb-4 text-sm text-slate-400">
-            Import configuration from the running Caddy instance.
-            <div class="mt-2 p-3 bg-amber-900/20 border border-amber-900/50 rounded text-amber-200">
-              <strong>Warning:</strong> Confirming import replaces all local routes. Unsupported Caddy routes are preserved read-only.
-              <div class="mt-2">{DRIFT_WARNING}</div>
+        <label class="flex items-center gap-3 cursor-pointer pt-2 border-t border-slate-700">
+          <input
+            type="checkbox"
+            checked={config.enable_encode}
+            onChange={(e) =>
+              setConfig({
+                ...config,
+                enable_encode: (e.target as HTMLInputElement).checked,
+              })
+            }
+            class="w-5 h-5 rounded bg-slate-900 border-slate-700"
+          />
+          <div>
+            <div class="font-medium">Response compression</div>
+            <div class="text-sm text-slate-500">
+              Add gzip and zstd handlers to UI-owned routes.
             </div>
           </div>
+        </label>
+      </form>
 
-          <div class="flex gap-2">
+      {preview && (
+        <div class="card">
+          <h2 class="text-lg font-semibold">Ownership Review</h2>
+          {preview.servers.length > 1 && (
+            <div class="mt-4">
+              <label class="label">HTTP Server</label>
+              <select
+                class="input"
+                value={preview.selected_server}
+                onChange={(e) =>
+                  reviewSetup((e.target as HTMLSelectElement).value)
+                }
+              >
+                {preview.servers.map((server) => (
+                  <option key={server} value={server}>
+                    {server}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <RoutePreview preview={preview} />
+          <div class="p-3 bg-amber-900/20 border border-amber-800/60 rounded text-amber-200 text-sm mt-4">
+            {DRIFT_WARNING}
+          </div>
+          <div class="flex justify-end mt-4">
             <button
               type="button"
-              onClick={handleImport}
-              disabled={importing}
-              class="btn bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200"
+              onClick={confirmSetup}
+              disabled={busy}
+              class="btn btn-primary"
             >
-              {importing ? 'Loading preview...' : 'Review Import from Caddy'}
+              Confirm Ownership
             </button>
-            {importPreview && (
-              <button type="button" onClick={confirmImport} disabled={importing} class="btn btn-primary">
-                {importing ? 'Importing...' : 'Confirm Import'}
-              </button>
-            )}
           </div>
+        </div>
+      )}
 
-          {importResult && (
-            <div class="mt-4 p-3 bg-green-900/30 border border-green-800 rounded text-green-200 text-sm">
-              Imported {importResult.imported} routes ({importResult.editable} editable, {importResult.readonly_preserved} read-only preserved, {importResult.unsupported} unsupported).
-            </div>
-          )}
-
-          {importPreview && (
-            <div class="mt-6 space-y-5">
-              <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-center text-sm">
-                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold">{importPreview.summary.total_found}</div><div class="text-slate-400">Found</div></div>
-                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-green-300">{importPreview.summary.editable}</div><div class="text-slate-400">Editable</div></div>
-                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-blue-300">{importPreview.summary.will_update}</div><div class="text-slate-400">Will update</div></div>
-                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-amber-300">{importPreview.summary.readonly_preserved}</div><div class="text-slate-400">Read-only</div></div>
-                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold text-red-300">{importPreview.summary.unsupported}</div><div class="text-slate-400">Unsupported</div></div>
-                <div class="bg-slate-900/60 rounded p-3"><div class="text-xl font-bold">{importPreview.summary.local_only}</div><div class="text-slate-400">Local-only removed</div></div>
+      <div class="card">
+        <h2 class="text-lg font-semibold mb-1">Restore Points</h2>
+        <p class="text-sm text-slate-400 mb-4">
+          A snapshot is saved before every Caddy write. Restore is also
+          ETag-guarded.
+        </p>
+        {snapshots.length === 0 ? (
+          <p class="text-sm text-slate-500">No snapshots yet.</p>
+        ) : (
+          <div class="space-y-2">
+            {snapshots.map((snapshot) => (
+              <div
+                key={snapshot.id}
+                class="bg-slate-900/60 rounded p-3 flex items-center justify-between gap-3"
+              >
+                <div>
+                  <div class="text-sm font-medium">{snapshot.reason}</div>
+                  <div class="text-xs text-slate-500">
+                    {snapshot.server} ·{" "}
+                    {new Date(snapshot.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <a
+                    class="btn btn-secondary text-sm"
+                    href={api.snapshotExportURL(snapshot.id)}
+                  >
+                    Export
+                  </a>
+                  <button
+                    type="button"
+                    class="btn btn-secondary text-sm"
+                    disabled={busy}
+                    onClick={() => restoreSnapshot(snapshot)}
+                  >
+                    Restore
+                  </button>
+                </div>
               </div>
-              {(importPreview.warnings || []).map((warning) => (
-                <div key={warning} class="p-3 bg-amber-900/20 border border-amber-900/50 rounded text-amber-200 text-sm">{warning}</div>
-              ))}
-              <ImportRows title="New from Caddy" rows={importPreview.groups.new_from_caddy} />
-              <ImportRows title="Will update" rows={importPreview.groups.will_update} />
-              <ImportRows title="Read-only preserved" rows={importPreview.groups.readonly_preserved} />
-              <ImportRows title="Local-only routes removed on confirm" rows={importPreview.groups.local_only} />
-            </div>
-          )}
-        </div>
-
-        {/* About */}
-        <div class="card">
-          <h2 class="text-lg font-semibold mb-4">About</h2>
-
-          <div class="space-y-2 text-sm text-slate-400">
-            <div>
-              <span class="text-slate-300">Caddy Admin UI</span>
-            </div>
-            <div>
-              A simple web UI for managing Caddy server routes.
-            </div>
+            ))}
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Submit */}
-        <div class="flex justify-end">
-          <button type="submit" class="btn btn-primary" disabled={saving}>
-            {saving ? 'Saving...' : 'Save Settings'}
-          </button>
-        </div>
-      </form>
+      <div class="card text-sm text-slate-400">
+        <h2 class="text-lg font-semibold text-slate-200 mb-2">
+          About Caddy Admin UI
+        </h2>
+        Safely manage a selected Caddy HTTP server's routes while preserving
+        unsupported configuration.
+      </div>
     </div>
   );
 }

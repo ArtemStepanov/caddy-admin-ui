@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/preview-pr <pull-request-number>
+  scripts/preview-pr up <pull-request-number>
+  scripts/preview-pr down <pull-request-number>
+
+Starts the selected pull request in an isolated git worktree with the Admin UI
+on 127.0.0.1:3000 and the Caddy data plane on 127.0.0.1:8080.
+EOF
+}
+
+action="up"
+case "${1:-}" in
+  up|down)
+    action="$1"
+    pr_number="${2:-}"
+    ;;
+  -h|--help|"")
+    usage
+    exit 0
+    ;;
+  *)
+    pr_number="$1"
+    ;;
+esac
+
+if [[ ! "$pr_number" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Pull request number must be a positive integer" >&2
+  usage >&2
+  exit 2
+fi
+
+for command in git docker; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "Required command not found: $command" >&2
+    exit 1
+  fi
+done
+
+repo_root="$(git rev-parse --show-toplevel)"
+compose_file="$repo_root/compose.preview.yml"
+preview_ref="refs/caddy-admin-ui-preview/pr-$pr_number"
+worktree="${TMPDIR:-/tmp}/caddy-admin-ui-pr-$pr_number"
+project="caddy-admin-ui-pr-$pr_number"
+source_dir="$worktree"
+if [[ ! -d "$source_dir" ]]; then
+  source_dir="$repo_root"
+fi
+
+if [[ ! -f "$compose_file" ]]; then
+  echo "Preview Compose file not found: $compose_file" >&2
+  exit 1
+fi
+
+compose() {
+  COMPOSE_PROJECT_NAME="$project" \
+  PREVIEW_IMAGE="caddy-admin-ui:pr-$pr_number" \
+  PREVIEW_SOURCE_DIR="$source_dir" \
+  PREVIEW_VERSION="pr-$pr_number" \
+    docker compose -f "$compose_file" "$@"
+}
+
+if [[ "$action" == "down" ]]; then
+  compose down --volumes --remove-orphans
+  if [[ -d "$worktree" ]]; then
+    git -C "$repo_root" worktree remove "$worktree"
+  else
+    git -C "$repo_root" worktree prune
+  fi
+  git -C "$repo_root" update-ref -d "$preview_ref"
+  echo "Removed local preview for PR #$pr_number"
+  exit 0
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker daemon is not available" >&2
+  exit 1
+fi
+
+git -C "$repo_root" fetch --force origin "+pull/$pr_number/head:$preview_ref"
+
+if [[ -d "$worktree" ]]; then
+  if ! git -C "$worktree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "Refusing to reuse non-worktree directory: $worktree" >&2
+    exit 1
+  fi
+  if [[ -n "$(git -C "$worktree" status --porcelain)" ]]; then
+    echo "Preview worktree has local changes; clean them before updating: $worktree" >&2
+    exit 1
+  fi
+  git -C "$worktree" switch --detach "$preview_ref"
+else
+  git -C "$repo_root" worktree prune
+  git -C "$repo_root" worktree add --detach "$worktree" "$preview_ref"
+fi
+
+source_dir="$worktree"
+
+compose up --build --detach --wait --wait-timeout 300
+
+ui_port="${PREVIEW_UI_PORT:-3000}"
+caddy_port="${PREVIEW_CADDY_PORT:-8080}"
+cat <<EOF
+PR #$pr_number preview is ready.
+
+Admin UI:        http://127.0.0.1:$ui_port
+Caddy data plane: http://127.0.0.1:$caddy_port/preview-seed
+Worktree:         $worktree
+
+Stop and remove it with:
+  $repo_root/scripts/preview-pr down $pr_number
+EOF
