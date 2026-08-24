@@ -24,6 +24,8 @@ Docker changes should also pass:
 ```bash
 docker build -t caddy-admin-ui:local .
 docker compose config
+make preview
+make preview-down
 ```
 
 ## Pull requests

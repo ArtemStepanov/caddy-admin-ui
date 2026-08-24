@@ -6,6 +6,12 @@ import (
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/storage"
 )
 
+// NewReadinessHandler creates the minimal readiness probe used by container
+// orchestration. Normal API routes use their own stateful handler.
+func NewReadinessHandler(store *storage.SQLiteStorage, defaultCaddyURL string) gin.HandlerFunc {
+	return NewHandler(store, defaultCaddyURL).Readiness
+}
+
 // SetupRoutes configures all API routes
 func SetupRoutes(r *gin.Engine, store *storage.SQLiteStorage, defaultCaddyURL string) {
 	h := NewHandler(store, defaultCaddyURL)

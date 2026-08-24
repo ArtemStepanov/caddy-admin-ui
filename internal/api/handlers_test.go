@@ -71,6 +71,54 @@ func TestListRoutes_Empty(t *testing.T) {
 	}
 }
 
+func TestReadiness(t *testing.T) {
+	t.Run("ready when storage and Caddy respond", func(t *testing.T) {
+		caddyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/config/" {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{}`))
+		}))
+		defer caddyServer.Close()
+
+		router, store, cleanup := setupTestRouter(t)
+		defer cleanup()
+		router.GET("/readyz", NewReadinessHandler(store, caddyServer.URL))
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("status %d want %d: %s", w.Code, http.StatusNoContent, w.Body.String())
+		}
+		if w.Body.Len() != 0 {
+			t.Fatalf("readiness probe leaked a response body: %q", w.Body.String())
+		}
+	})
+
+	t.Run("not ready when Caddy is unavailable", func(t *testing.T) {
+		caddyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		caddyURL := caddyServer.URL
+		caddyServer.Close()
+
+		router, store, cleanup := setupTestRouter(t)
+		defer cleanup()
+		router.GET("/readyz", NewReadinessHandler(store, caddyURL))
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+		if w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status %d want %d: %s", w.Code, http.StatusServiceUnavailable, w.Body.String())
+		}
+		if w.Body.Len() != 0 {
+			t.Fatalf("readiness failure leaked a response body: %q", w.Body.String())
+		}
+	})
+}
+
 func TestCreateRoute_Success(t *testing.T) {
 	router, _, cleanup := setupTestRouter(t)
 	defer cleanup()

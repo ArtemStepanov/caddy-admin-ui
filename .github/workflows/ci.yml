@@ -94,7 +94,31 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          load: true
           push: false
           tags: caddy-admin-ui:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Validate private preview configuration
+        run: |
+          bash -n .devcontainer/start-preview.sh scripts/preview-pr
+          docker compose -f compose.preview.yml config >/dev/null
+
+      - name: Start private preview stack
+        env:
+          PREVIEW_IMAGE: caddy-admin-ui:ci
+        run: docker compose -f compose.preview.yml up --no-build --detach --wait --wait-timeout 120
+
+      - name: Smoke test private preview stack
+        run: |
+          curl --fail --silent http://127.0.0.1:3000/readyz --output /dev/null
+          test "$(curl --fail --silent http://127.0.0.1:8080/preview-seed)" = "Caddy PR preview is running"
+
+      - name: Private preview logs
+        if: failure()
+        run: docker compose -f compose.preview.yml logs
+
+      - name: Stop private preview stack
+        if: always()
+        run: docker compose -f compose.preview.yml down --volumes --remove-orphans

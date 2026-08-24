@@ -1,4 +1,4 @@
-.PHONY: all build run dev docker clean test docker-up-build
+.PHONY: all build run dev docker clean test docker-up-build preview preview-down
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/ArtemStepanov/caddy-admin-ui/internal/version.Version=$(VERSION)
@@ -37,6 +37,14 @@ docker-up-build:
 # Stop Docker Compose
 docker-down:
 	docker compose down
+
+# Run a disposable, loopback-only Admin UI + Caddy preview from this checkout
+preview:
+	docker compose -f compose.preview.yml up --build -d --wait --wait-timeout 300
+
+# Remove the disposable preview and all of its local data
+preview-down:
+	docker compose -f compose.preview.yml down --volumes --remove-orphans
 
 # View logs
 logs:

@@ -24,8 +24,11 @@ go.sum @ArtemStepanov
 
 # CI/CD and DevOps
 /.github/ @ArtemStepanov
+/.devcontainer/ @ArtemStepanov
+/scripts/ @ArtemStepanov
 Dockerfile @ArtemStepanov
 docker-compose*.yml @ArtemStepanov
+compose*.yml @ArtemStepanov
 Makefile @ArtemStepanov
 
 # Documentation

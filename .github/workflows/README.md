@@ -1,6 +1,6 @@
 # Workflows
 
-- `ci.yml`: Go build/vet/race tests, real-Caddy scoped-write integration test, frontend lint/typecheck/coverage/build, and Docker build on `main` pushes and pull requests.
+- `ci.yml`: Go build/vet/race tests, real-Caddy scoped-write integration test, frontend lint/typecheck/coverage/build, Docker build, and an isolated local preview smoke test on `main` pushes and pull requests. The preview is not published.
 - `security.yml`: blocking gosec, govulncheck, npm audit, Trivy filesystem/image scans, plus scheduled CodeQL.
 - `release.yml`: release-please and multi-architecture GHCR images from `main`.
 

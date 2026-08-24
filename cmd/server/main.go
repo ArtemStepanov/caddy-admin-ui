@@ -63,6 +63,10 @@ func main() {
 		log.Printf("  WARNING: unauthenticated non-loopback access explicitly enabled")
 	}
 
+	// Readiness verifies the database and Caddy connection. Register it after
+	// optional Basic Auth so authenticated deployments do not expose an SSRF oracle.
+	r.GET("/readyz", api.NewReadinessHandler(store, caddyURL))
+
 	// Setup API routes
 	api.SetupRoutes(r, store, caddyURL)
 

@@ -69,6 +69,20 @@ func NewHandler(store *storage.SQLiteStorage, defaultCaddyURL string) *Handler {
 	}
 }
 
+// Readiness reports whether both the local database and the configured Caddy
+// Admin API are reachable. It deliberately returns no topology or error details.
+func (h *Handler) Readiness(c *gin.Context) {
+	if _, err := h.store.GetGlobalConfig(); err != nil {
+		c.Status(http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.getCaddyClient().Health(); err != nil {
+		c.Status(http.StatusServiceUnavailable)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 // getCaddyClient returns a Caddy client using the URL from GlobalConfig (or default)
 func (h *Handler) getCaddyClient() *caddy.Client {
 	cfg, err := h.store.GetGlobalConfig()

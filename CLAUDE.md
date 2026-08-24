@@ -22,6 +22,8 @@ Go 1.25.13 and Node.js 24 are managed by `mise.toml`. GCC is required for CGO/SQ
 | `make clean` | Remove build artifacts (`bin/`, `web/dist/`, `web/node_modules/`) |
 | `make logs` | Tail Docker Compose logs |
 | `make docker-up-build` | Build image and start Docker Compose stack |
+| `make preview` / `make preview-down` | Build/start or remove the disposable loopback preview stack |
+| `./scripts/preview-pr <number>` | Preview a PR in an isolated temporary git worktree |
 
 ### Running Individual Tests
 
@@ -95,3 +97,4 @@ Frontend (Preact/TS)  ──/api/*──►  Go Backend (Gin)  ──HTTP──�
 4. **Recovery**: A snapshot of the live route array is persisted before every write; restore is also ETag-guarded.
 5. **Dynamic Caddy URL**: Configurable at runtime via GlobalConfig, falling back to `CADDY_ADMIN_URL`. Changing it clears setup ownership.
 6. **Preact and Tailwind CSS**: Keep the frontend small while using a familiar component and utility-class model.
+7. **Private manual previews**: Codespaces and the local worktree helper run the real two-container stack on demand. No PR deployment workflow or public Caddy Admin API is used.

@@ -34,6 +34,42 @@ To build the image from the checked-out source instead:
 make docker-up-build
 ```
 
+## Review a pull request privately
+
+GitHub Codespaces can run any selected pull request as a disposable Admin UI +
+Caddy stack without creating a deployment, check, or comment on the pull
+request:
+
+1. Open the pull request on GitHub.
+2. Select **Code → Codespaces → Create codespace**.
+3. Wait for the dev container to build the preview stack.
+4. Open **Caddy Admin UI** from the forwarded ports panel. The **Caddy data
+   plane** port is available separately for end-to-end route checks.
+
+Both forwarded ports are declared private and require authentication as the
+Codespace owner. Caddy's Admin API is reachable only inside the preview Docker
+network and is never forwarded. The preview stores data only in disposable
+Docker volumes; deleting the Codespace removes the whole environment.
+
+To review a pull request locally without switching the current checkout, use
+the worktree helper:
+
+```bash
+./scripts/preview-pr 127
+# Admin UI: http://127.0.0.1:3000
+# Caddy:    http://127.0.0.1:8080/preview-seed
+
+./scripts/preview-pr down 127
+```
+
+The helper fetches `refs/pull/<number>/head`, builds it in an isolated temporary
+git worktree, and binds both ports to loopback. Only one preview can use the
+default ports at a time; set `PREVIEW_UI_PORT` and `PREVIEW_CADDY_PORT` to run
+more than one. Review untrusted pull-request code before running it locally.
+
+For the current checkout, the equivalent commands are `make preview` and
+`make preview-down`.
+
 ## Connect an existing Caddy
 
 Caddy Admin UI must reach the Admin API, but that API should not be exposed to an untrusted network. Set credentials for the UI and an Admin API URL reachable from its container:
@@ -109,6 +145,7 @@ CI runs race-enabled Go tests, frontend lint/typecheck/coverage/build, a real-Ca
 | `POST` | `/api/setup/confirm` | Confirm the unchanged preview and adopt its routes |
 | `GET/POST/PUT/DELETE` | `/api/routes...` | Manage UI-owned routes |
 | `POST` | `/api/sync` | Guarded manual sync of the selected route array |
+| `GET` | `/readyz` | Minimal database + Caddy readiness probe |
 | `GET` | `/api/snapshots` | List recent restore points |
 | `GET` | `/api/snapshots/:id/export` | Export route-array JSON |
 | `POST` | `/api/snapshots/:id/restore` | Guarded snapshot restore |
