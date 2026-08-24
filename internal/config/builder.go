@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/storage"
@@ -50,10 +49,13 @@ type Server struct {
 
 // Route is a Caddy route
 type Route struct {
+	ID       string    `json:"@id,omitempty"`
 	Match    []Match   `json:"match,omitempty"`
 	Handle   []Handler `json:"handle"`
 	Terminal bool      `json:"terminal,omitempty"`
 }
+
+const ManagedRouteIDPrefix = "caddy-admin-ui-route-"
 
 // Match is a request matcher
 type Match struct {
@@ -76,6 +78,7 @@ var managedHandlerTypes = map[string]bool{
 
 // ValidateRoutesForBuild rejects routes that would otherwise be silently dropped while building Caddy config.
 func ValidateRoutesForBuild(routes []*storage.Route) error {
+	seen := make(map[string]string)
 	for _, route := range routes {
 		if route == nil || !route.Enabled {
 			continue
@@ -88,12 +91,17 @@ func ValidateRoutesForBuild(routes []*storage.Route) error {
 			if len(route.RawCaddyRoute) == 0 || route.ReadOnlyReason == "" {
 				return fmt.Errorf("read-only route %q is missing preserved raw config or reason", route.ID)
 			}
-			var original Route
-			if err := json.Unmarshal(route.RawCaddyRoute, &original); err != nil || len(original.Handle) == 0 {
+			var original map[string]any
+			if err := json.Unmarshal(route.RawCaddyRoute, &original); err != nil || original == nil {
 				return fmt.Errorf("read-only route %q has invalid preserved raw config", route.ID)
 			}
 			continue
 		}
+		key := strings.ToLower(strings.TrimSpace(route.Domain)) + "\x00" + normalizePath(route.Path)
+		if previousID, duplicate := seen[key]; duplicate {
+			return fmt.Errorf("route %q duplicates host/path managed by route %q", route.ID, previousID)
+		}
+		seen[key] = route.ID
 
 		switch route.HandlerType {
 		case "reverse_proxy":
@@ -118,14 +126,40 @@ func ValidateRoutesForBuild(routes []*storage.Route) error {
 	return nil
 }
 
-// BuildCaddyConfig converts stored routes to Caddy JSON config
-func BuildCaddyConfig(routes []*storage.Route, global *storage.GlobalConfig) *CaddyConfig {
-	// Always preserve admin listener on 0.0.0.0:2019 so we can continue managing Caddy
-	config := &CaddyConfig{
-		Admin: &AdminConfig{
-			Listen: "0.0.0.0:2019",
-		},
+// BuildCaddyRoutes builds only the route array owned by the selected Caddy HTTP server.
+// Preserved read-only routes are emitted byte-for-byte semantically, while UI-owned routes
+// receive a stable @id marker so they can be recognized on the next import.
+func BuildCaddyRoutes(routes []*storage.Route, global *storage.GlobalConfig) ([]json.RawMessage, error) {
+	if err := ValidateRoutesForBuild(routes); err != nil {
+		return nil, err
 	}
+	built := make([]json.RawMessage, 0, len(routes))
+	for _, storedRoute := range routes {
+		if storedRoute == nil || !storedRoute.Enabled {
+			continue
+		}
+		if storedRoute.IsReadOnly() {
+			built = append(built, append(json.RawMessage(nil), storedRoute.RawCaddyRoute...))
+			continue
+		}
+		caddyRoute := buildRoute(storedRoute, global)
+		if caddyRoute == nil {
+			return nil, fmt.Errorf("route %q could not be built", storedRoute.ID)
+		}
+		caddyRoute.ID = ManagedRouteIDPrefix + storedRoute.ID
+		raw, err := json.Marshal(caddyRoute)
+		if err != nil {
+			return nil, fmt.Errorf("marshal route %q: %w", storedRoute.ID, err)
+		}
+		built = append(built, raw)
+	}
+	return built, nil
+}
+
+// BuildCaddyConfig creates a detached config fixture for parser/builder tests.
+// Runtime writes must use BuildCaddyRoutes and a scoped Caddy API path.
+func BuildCaddyConfig(routes []*storage.Route, global *storage.GlobalConfig) *CaddyConfig {
+	config := &CaddyConfig{}
 
 	if len(routes) == 0 {
 		return config
@@ -143,14 +177,6 @@ func BuildCaddyConfig(routes []*storage.Route, global *storage.GlobalConfig) *Ca
 		return config
 	}
 
-	// Sort routes by domain for consistent output
-	sort.Slice(enabledRoutes, func(i, j int) bool {
-		if enabledRoutes[i].Domain != enabledRoutes[j].Domain {
-			return enabledRoutes[i].Domain < enabledRoutes[j].Domain
-		}
-		return enabledRoutes[i].Path < enabledRoutes[j].Path
-	})
-
 	// Build Caddy routes
 	var caddyRoutes []Route
 	for _, sr := range enabledRoutes {
@@ -164,7 +190,6 @@ func BuildCaddyConfig(routes []*storage.Route, global *storage.GlobalConfig) *Ca
 		HTTP: &HTTPApp{
 			Servers: map[string]*Server{
 				"srv0": {
-					Listen: []string{":443", ":80"},
 					Routes: caddyRoutes,
 				},
 			},

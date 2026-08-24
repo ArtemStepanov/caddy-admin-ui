@@ -1,23 +1,29 @@
 services:
-  orchestrator:
+  admin-ui:
     image: ghcr.io/artemstepanov/caddy-admin-ui:latest
     # Or build locally:
     # build: .
     ports:
-      - "3000:3000"
+      - "${UI_BIND_ADDRESS:-127.0.0.1}:3000:3000"
     environment:
-      - CADDY_ADMIN_URL=${CADDY_ADMIN_URL:-http://localhost:2019}
+      - CADDY_ADMIN_URL=${CADDY_ADMIN_URL:?Set CADDY_ADMIN_URL to an Admin API reachable from this container}
       - DB_PATH=/app/data/routes.db
       - GIN_MODE=release
+      - LISTEN_ADDR=0.0.0.0:3000
+      - ADMIN_USER=${ADMIN_USER:?Set ADMIN_USER}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
     volumes:
-      - ./data:/app/data
+      - admin-ui-data:/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/status"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
-# For external Caddy, set CADDY_ADMIN_URL environment variable
-# Example: CADDY_ADMIN_URL=http://192.168.1.100:2019 docker compose -f docker-compose.prod.yml up -d
+# The Caddy Admin API must be reachable from the container but should not be
+# published to an untrusted network. The UI itself is loopback-bound by default.
+
+volumes:
+  admin-ui-data:

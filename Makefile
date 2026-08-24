@@ -12,7 +12,7 @@ build:
 
 # Build frontend
 frontend:
-	cd web && npm install && npm run build
+	cd web && npm ci && npm run build
 
 # Run locally (development)
 dev:
@@ -44,7 +44,7 @@ logs:
 
 # Run tests
 test:
-	CGO_ENABLED=1 go test $$(go list ./... | grep -v '/web/node_modules/')
+	CGO_ENABLED=1 go test -race ./cmd/... ./internal/...
 	cd web && npm test -- run
 
 # Clean build artifacts
@@ -56,4 +56,4 @@ clean:
 # Install dependencies
 deps:
 	go mod download
-	cd web && npm install
+	cd web && npm ci

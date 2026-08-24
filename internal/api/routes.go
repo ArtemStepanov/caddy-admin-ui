@@ -29,7 +29,10 @@ func SetupRoutes(r *gin.Engine, store *storage.SQLiteStorage, defaultCaddyURL st
 		api.GET("/status", h.GetStatus)
 		api.POST("/sync", h.SyncToCaddy)
 		api.POST("/test-connection", h.TestConnection)
-		api.POST("/import-preview", h.PreviewImport)
-		api.POST("/import", h.ImportFromCaddy)
+		api.POST("/setup/preview", h.PreviewSetup)
+		api.POST("/setup/confirm", h.ConfirmSetup)
+		api.GET("/snapshots", h.ListSnapshots)
+		api.GET("/snapshots/:id/export", h.ExportSnapshot)
+		api.POST("/snapshots/:id/restore", h.RestoreSnapshot)
 	}
 }

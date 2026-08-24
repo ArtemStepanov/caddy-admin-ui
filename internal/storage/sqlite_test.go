@@ -32,6 +32,37 @@ func setupTestDB(t *testing.T) (*SQLiteStorage, func()) {
 	return storage, cleanup
 }
 
+func TestSQLiteStorage_SnapshotsAndPosition(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSQLiteStorage(filepath.Join(tmpDir, "snapshots.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.CreateRoute(&Route{Domain: "second.example.com", HandlerType: "file_server", Config: json.RawMessage(`{}`), Enabled: true, Position: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateRoute(&Route{Domain: "first.example.com", HandlerType: "file_server", Config: json.RawMessage(`{}`), Enabled: true, Position: 1}); err != nil {
+		t.Fatal(err)
+	}
+	routes, err := store.ListRoutes()
+	if err != nil || len(routes) != 2 || routes[0].Domain != "first.example.com" {
+		t.Fatalf("position order not preserved: %+v err=%v", routes, err)
+	}
+	snapshot := &Snapshot{Server: "srv0", ETag: `"one"`, Routes: json.RawMessage(`[]`), Reason: "test"}
+	if err := store.CreateSnapshot(snapshot); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := store.ListSnapshots()
+	if err != nil || len(listed) != 1 || len(listed[0].Routes) != 0 {
+		t.Fatalf("bad snapshot list: %+v err=%v", listed, err)
+	}
+	loaded, err := store.GetSnapshot(snapshot.ID)
+	if err != nil || string(loaded.Routes) != "[]" {
+		t.Fatalf("bad snapshot payload: %+v err=%v", loaded, err)
+	}
+}
+
 func TestNewSQLiteStorage(t *testing.T) {
 	storage, cleanup := setupTestDB(t)
 	defer cleanup()

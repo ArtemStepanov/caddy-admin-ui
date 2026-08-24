@@ -1,16 +1,41 @@
-import { useState, useEffect } from 'preact/hooks';
-import { route as navigate } from 'preact-router';
-import { api } from '../lib/api';
-import { HeaderEditor, getDefaultHeaderConfig } from '../components/forms/HeaderEditor';
+import { useCallback, useEffect, useState } from "preact/hooks";
+import { route as navigate } from "preact-router";
+import {
+  api,
+  FileServerConfig as FileServerConfigData,
+  RedirectConfig as RedirectConfigData,
+  ReverseProxyConfig as ReverseProxyConfigData,
+  RouteConfig,
+} from "../lib/api";
+import { errorMessage } from "../lib/messages";
+import {
+  HeaderEditor,
+  getDefaultHeaderConfig,
+} from "../components/forms/HeaderEditor";
 
 interface RouteFormProps {
   id?: string;
 }
 
 const HANDLER_TYPES = [
-  { id: 'reverse_proxy', name: 'Reverse Proxy', description: 'Forward requests to a backend service', icon: '🔄' },
-  { id: 'file_server', name: 'File Server', description: 'Serve static files from a directory', icon: '📁' },
-  { id: 'redir', name: 'Redirect', description: 'Redirect to another URL', icon: '↗️' },
+  {
+    id: "reverse_proxy",
+    name: "Reverse Proxy",
+    description: "Forward requests to a backend service",
+    icon: "🔄",
+  },
+  {
+    id: "file_server",
+    name: "File Server",
+    description: "Serve static files from a directory",
+    icon: "📁",
+  },
+  {
+    id: "redir",
+    name: "Redirect",
+    description: "Redirect to another URL",
+    icon: "↗️",
+  },
 ];
 
 export function RouteForm({ id }: RouteFormProps) {
@@ -19,39 +44,48 @@ export function RouteForm({ id }: RouteFormProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [domain, setDomain] = useState('');
-  const [path, setPath] = useState('');
-  const [stripPathPrefix, setStripPathPrefix] = useState('');
-  const [handlerType, setHandlerType] = useState('reverse_proxy');
-  const [config, setConfig] = useState<any>({ upstreams: [], websocket: false, headers: {}, load_balancing: 'round_robin' });
+  const [domain, setDomain] = useState("");
+  const [path, setPath] = useState("");
+  const [stripPathPrefix, setStripPathPrefix] = useState("");
+  const [handlerType, setHandlerType] = useState("reverse_proxy");
+  const [config, setConfig] = useState<RouteConfig>({
+    upstreams: [],
+    headers: {},
+    load_balancing: "round_robin",
+  });
   const [headers, setHeaders] = useState(getDefaultHeaderConfig());
   const [showHeaders, setShowHeaders] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
 
-  async function loadRoute() {
+  const loadRoute = useCallback(async () => {
+    if (!id) return;
     try {
-      const { route } = await api.getRoute(id!);
+      const { route } = await api.getRoute(id);
       setDomain(route.domain);
-      setPath(route.path || '');
-      setStripPathPrefix(route.strip_path_prefix || '');
+      setPath(route.path || "");
+      setStripPathPrefix(route.strip_path_prefix || "");
       setHandlerType(route.handler_type);
-      setConfig(typeof route.config === 'string' ? JSON.parse(route.config) : route.config);
+      setConfig(
+        typeof route.config === "string"
+          ? JSON.parse(route.config)
+          : route.config,
+      );
       setReadOnly(route.readonly || false);
       if (route.headers) {
         setHeaders(route.headers);
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
     if (isEdit) {
-      loadRoute();
+      void loadRoute();
     }
-  }, [id]);
+  }, [isEdit, loadRoute]);
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
@@ -62,7 +96,10 @@ export function RouteForm({ id }: RouteFormProps) {
       const routeData = {
         domain,
         path: path || undefined,
-        strip_path_prefix: handlerType === 'reverse_proxy' ? (stripPathPrefix || undefined) : undefined,
+        strip_path_prefix:
+          handlerType === "reverse_proxy"
+            ? stripPathPrefix || undefined
+            : undefined,
         handler_type: handlerType,
         config,
         headers,
@@ -74,9 +111,9 @@ export function RouteForm({ id }: RouteFormProps) {
         await api.createRoute(routeData);
       }
 
-      navigate('/');
-    } catch (err: any) {
-      setError(err.message);
+      navigate("/");
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -84,16 +121,26 @@ export function RouteForm({ id }: RouteFormProps) {
 
   function handleHandlerTypeChange(type: string) {
     setHandlerType(type);
-    setStripPathPrefix('');
+    setStripPathPrefix("");
     switch (type) {
-      case 'reverse_proxy':
-        setConfig({ upstreams: [], websocket: false, headers: {}, load_balancing: 'round_robin' });
+      case "reverse_proxy":
+        setConfig({
+          upstreams: [],
+          headers: {},
+          load_balancing: "round_robin",
+        });
         break;
-      case 'file_server':
-        setConfig({ root: '', browse: false, index: [], hide: [], precompressed: false });
+      case "file_server":
+        setConfig({
+          root: "",
+          browse: false,
+          index: [],
+          hide: [],
+          precompressed: false,
+        });
         break;
-      case 'redir':
-        setConfig({ to: '', code: 302 });
+      case "redir":
+        setConfig({ to: "", code: 302 });
         break;
     }
   }
@@ -111,7 +158,9 @@ export function RouteForm({ id }: RouteFormProps) {
       <div class="max-w-3xl mx-auto">
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold">Read-only Route</h1>
-          <a href="/" class="btn btn-secondary">Back</a>
+          <a href="/" class="btn btn-secondary">
+            Back
+          </a>
         </div>
         {error && (
           <div class="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-6 text-red-300">
@@ -119,7 +168,9 @@ export function RouteForm({ id }: RouteFormProps) {
           </div>
         )}
         <div class="bg-amber-900/50 border border-amber-700 rounded-lg p-4 text-amber-300">
-          {domain} is managed outside the UI and cannot be edited, deleted, toggled, or field-mutated here. Use the dashboard View JSON action for technical details.
+          {domain} is managed outside the UI and cannot be edited, deleted,
+          toggled, or field-mutated here. Use the dashboard View JSON action for
+          technical details.
         </div>
       </div>
     );
@@ -128,8 +179,12 @@ export function RouteForm({ id }: RouteFormProps) {
   return (
     <div class="max-w-3xl mx-auto">
       <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold">{isEdit ? 'Edit Route' : 'New Route'}</h1>
-        <a href="/" class="btn btn-secondary">Cancel</a>
+        <h1 class="text-2xl font-bold">
+          {isEdit ? "Edit Route" : "New Route"}
+        </h1>
+        <a href="/" class="btn btn-secondary">
+          Cancel
+        </a>
       </div>
 
       {error && (
@@ -169,36 +224,53 @@ export function RouteForm({ id }: RouteFormProps) {
                 class="input"
               />
               <p class="text-sm text-slate-500 mt-1">
-                Match specific paths (e.g., /api/*, /admin). Use /* at the end to match all sub-paths.
+                Match specific paths (e.g., /api/*, /admin). Use /* at the end
+                to match all sub-paths.
               </p>
             </div>
           </div>
 
           {/* Strip Path Prefix */}
-          {path && handlerType === 'reverse_proxy' && (
+          {path && handlerType === "reverse_proxy" && (
             <div class="mt-4">
               <label class="label">Strip Path Prefix (Optional)</label>
               <input
                 type="text"
                 value={stripPathPrefix}
-                onInput={(e) => setStripPathPrefix((e.target as HTMLInputElement).value)}
-                placeholder={path.replace(/^\/?/, '/').replace(/\*$/, '').replace(/\/$/, '') || '/api'}
+                onInput={(e) =>
+                  setStripPathPrefix((e.target as HTMLInputElement).value)
+                }
+                placeholder={
+                  path
+                    .replace(/^\/?/, "/")
+                    .replace(/\*$/, "")
+                    .replace(/\/$/, "") || "/api"
+                }
                 class="input"
               />
               <p class="text-sm text-slate-500 mt-1">
-                Remove this prefix before forwarding to backend (e.g., /api/users becomes /users)
+                Remove this prefix before forwarding to backend (e.g.,
+                /api/users becomes /users)
               </p>
               {stripPathPrefix && (
                 <div class="mt-2 p-2 bg-slate-800/50 rounded text-sm">
                   <span class="text-slate-400">Example: </span>
                   <code class="text-primary-400">
-                    {(path.startsWith('/') ? path : '/' + path).replace('*', 'endpoint')}
+                    {(path.startsWith("/") ? path : "/" + path).replace(
+                      "*",
+                      "endpoint",
+                    )}
                   </code>
                   <span class="text-slate-400"> → </span>
                   <code class="text-green-400">
-                    {(path.startsWith('/') ? path : '/' + path)
-                      .replace('*', 'endpoint')
-                      .replace(stripPathPrefix.startsWith('/') ? stripPathPrefix : '/' + stripPathPrefix, '') || '/'}
+                    {(path.startsWith("/") ? path : "/" + path)
+                      .replace("*", "endpoint")
+                      .replace(
+                        stripPathPrefix.startsWith("/")
+                          ? stripPathPrefix
+                          : "/" + stripPathPrefix,
+                        "",
+                      ) || "/"}
                   </code>
                 </div>
               )}
@@ -207,7 +279,7 @@ export function RouteForm({ id }: RouteFormProps) {
         </div>
 
         {/* Handler Type Selection */}
-        <div class={readOnly ? 'card opacity-60 pointer-events-none' : 'card'}>
+        <div class={readOnly ? "card opacity-60 pointer-events-none" : "card"}>
           <h2 class="text-lg font-semibold mb-4">Handler Type</h2>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             {HANDLER_TYPES.map((type) => (
@@ -215,10 +287,11 @@ export function RouteForm({ id }: RouteFormProps) {
                 key={type.id}
                 type="button"
                 onClick={() => handleHandlerTypeChange(type.id)}
-                class={`card text-left transition-all ${handlerType === type.id
-                  ? 'ring-2 ring-primary-500 border-primary-500'
-                  : 'hover:border-slate-600'
-                  }`}
+                class={`card text-left transition-all ${
+                  handlerType === type.id
+                    ? "ring-2 ring-primary-500 border-primary-500"
+                    : "hover:border-slate-600"
+                }`}
                 disabled={readOnly}
               >
                 <div class="text-2xl mb-2">{type.icon}</div>
@@ -230,19 +303,28 @@ export function RouteForm({ id }: RouteFormProps) {
         </div>
 
         {/* Handler-specific config */}
-        <div class={readOnly ? 'card opacity-60 pointer-events-none' : 'card'}>
+        <div class={readOnly ? "card opacity-60 pointer-events-none" : "card"}>
           <h2 class="text-lg font-semibold mb-4">Handler Configuration</h2>
 
-          {handlerType === 'reverse_proxy' && (
-            <ReverseProxyConfig config={config} onChange={setConfig} />
+          {handlerType === "reverse_proxy" && (
+            <ReverseProxyConfig
+              config={config as ReverseProxyConfigData}
+              onChange={setConfig}
+            />
           )}
 
-          {handlerType === 'file_server' && (
-            <FileServerConfig config={config} onChange={setConfig} />
+          {handlerType === "file_server" && (
+            <FileServerConfig
+              config={config as FileServerConfigData}
+              onChange={setConfig}
+            />
           )}
 
-          {handlerType === 'redir' && (
-            <RedirectConfig config={config} onChange={setConfig} />
+          {handlerType === "redir" && (
+            <RedirectConfig
+              config={config as RedirectConfigData}
+              onChange={setConfig}
+            />
           )}
         </div>
 
@@ -254,7 +336,7 @@ export function RouteForm({ id }: RouteFormProps) {
             class="w-full text-left flex items-center justify-between"
           >
             <h2 class="text-lg font-semibold">Response Headers (Optional)</h2>
-            <span class="text-slate-400">{showHeaders ? '▼' : '▶'}</span>
+            <span class="text-slate-400">{showHeaders ? "▼" : "▶"}</span>
           </button>
 
           {showHeaders && (
@@ -266,9 +348,11 @@ export function RouteForm({ id }: RouteFormProps) {
 
         {/* Submit */}
         <div class="flex justify-end gap-4">
-          <a href="/" class="btn btn-secondary">Cancel</a>
+          <a href="/" class="btn btn-secondary">
+            Cancel
+          </a>
           <button type="submit" class="btn btn-primary" disabled={saving}>
-            {saving ? 'Saving...' : isEdit ? 'Update Route' : 'Create Route'}
+            {saving ? "Saving..." : isEdit ? "Update Route" : "Create Route"}
           </button>
         </div>
       </form>
@@ -276,34 +360,50 @@ export function RouteForm({ id }: RouteFormProps) {
   );
 }
 
-function ReverseProxyConfig({ config, onChange }: { config: any; onChange: (c: any) => void }) {
-  const [newUpstream, setNewUpstream] = useState('');
-  const [newHeaderKey, setNewHeaderKey] = useState('');
-  const [newHeaderValue, setNewHeaderValue] = useState('');
+function ReverseProxyConfig({
+  config,
+  onChange,
+}: {
+  config: ReverseProxyConfigData;
+  onChange: (c: ReverseProxyConfigData) => void;
+}) {
+  const [newUpstream, setNewUpstream] = useState("");
+  const [newHeaderKey, setNewHeaderKey] = useState("");
+  const [newHeaderValue, setNewHeaderValue] = useState("");
 
   const addUpstream = () => {
     if (!newUpstream.trim()) return;
-    onChange({ ...config, upstreams: [...(config.upstreams || []), newUpstream.trim()] });
-    setNewUpstream('');
+    onChange({
+      ...config,
+      upstreams: [...(config.upstreams || []), newUpstream.trim()],
+    });
+    setNewUpstream("");
   };
 
   const removeUpstream = (index: number) => {
-    onChange({ ...config, upstreams: config.upstreams.filter((_: any, i: number) => i !== index) });
+    onChange({
+      ...config,
+      upstreams: config.upstreams.filter((_, i) => i !== index),
+    });
   };
 
   const addHeader = () => {
     if (!newHeaderKey.trim()) return;
     onChange({
       ...config,
-      headers: { ...(config.headers || {}), [newHeaderKey.trim()]: newHeaderValue },
+      headers: {
+        ...(config.headers || {}),
+        [newHeaderKey.trim()]: newHeaderValue,
+      },
     });
-    setNewHeaderKey('');
-    setNewHeaderValue('');
+    setNewHeaderKey("");
+    setNewHeaderValue("");
   };
 
   const removeHeader = (key: string) => {
-    const { [key]: _, ...rest } = config.headers || {};
-    onChange({ ...config, headers: rest });
+    const nextHeaders = { ...(config.headers || {}) };
+    delete nextHeaders[key];
+    onChange({ ...config, headers: nextHeaders });
   };
 
   const addHeaderPreset = (key: string, value: string) => {
@@ -319,14 +419,24 @@ function ReverseProxyConfig({ config, onChange }: { config: any; onChange: (c: a
       <div>
         <label class="label">Backend Servers *</label>
         <p class="text-sm text-slate-500 mb-2">
-          Enter the address of your backend service (e.g., localhost:8080, 10.0.0.5:3000)
+          Enter the address of your backend service (e.g., localhost:8080,
+          10.0.0.5:3000)
         </p>
 
         <div class="space-y-2 mb-2">
           {(config.upstreams || []).map((upstream: string, index: number) => (
             <div key={index} class="flex items-center gap-2">
-              <input type="text" value={upstream} class="input flex-1" readOnly />
-              <button type="button" onClick={() => removeUpstream(index)} class="btn btn-danger">
+              <input
+                type="text"
+                value={upstream}
+                class="input flex-1"
+                readOnly
+              />
+              <button
+                type="button"
+                onClick={() => removeUpstream(index)}
+                class="btn btn-danger"
+              >
                 Remove
               </button>
             </div>
@@ -337,29 +447,19 @@ function ReverseProxyConfig({ config, onChange }: { config: any; onChange: (c: a
           <input
             type="text"
             value={newUpstream}
-            onInput={(e) => setNewUpstream((e.target as HTMLInputElement).value)}
+            onInput={(e) =>
+              setNewUpstream((e.target as HTMLInputElement).value)
+            }
             placeholder="localhost:8080"
             class="input flex-1"
-            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addUpstream())}
+            onKeyPress={(e) =>
+              e.key === "Enter" && (e.preventDefault(), addUpstream())
+            }
           />
-          <button type="button" onClick={addUpstream} class="btn btn-secondary">Add</button>
+          <button type="button" onClick={addUpstream} class="btn btn-secondary">
+            Add
+          </button>
         </div>
-      </div>
-
-      {/* WebSocket Support */}
-      <div>
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={config.websocket || false}
-            onChange={(e) => onChange({ ...config, websocket: (e.target as HTMLInputElement).checked })}
-            class="w-5 h-5 rounded bg-slate-900 border-slate-700"
-          />
-          <div>
-            <div class="font-medium">Enable WebSocket Support</div>
-            <div class="text-sm text-slate-500">Allows WebSocket connections to pass through</div>
-          </div>
-        </label>
       </div>
 
       {/* Load Balancing - only show when multiple upstreams */}
@@ -367,8 +467,13 @@ function ReverseProxyConfig({ config, onChange }: { config: any; onChange: (c: a
         <div>
           <label class="label">Load Balancing Policy</label>
           <select
-            value={config.load_balancing || 'round_robin'}
-            onChange={(e) => onChange({ ...config, load_balancing: (e.target as HTMLSelectElement).value })}
+            value={config.load_balancing || "round_robin"}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                load_balancing: (e.target as HTMLSelectElement).value,
+              })
+            }
             class="input"
           >
             <option value="round_robin">Round Robin</option>
@@ -394,8 +499,17 @@ function ReverseProxyConfig({ config, onChange }: { config: any; onChange: (c: a
           {Object.entries(config.headers || {}).map(([key, value]) => (
             <div key={key} class="flex items-center gap-2">
               <input type="text" value={key} class="input w-1/3" readOnly />
-              <input type="text" value={value as string} class="input flex-1" readOnly />
-              <button type="button" onClick={() => removeHeader(key)} class="btn btn-danger">
+              <input
+                type="text"
+                value={value as string}
+                class="input flex-1"
+                readOnly
+              />
+              <button
+                type="button"
+                onClick={() => removeHeader(key)}
+                class="btn btn-danger"
+              >
                 Remove
               </button>
             </div>
@@ -406,19 +520,27 @@ function ReverseProxyConfig({ config, onChange }: { config: any; onChange: (c: a
           <input
             type="text"
             value={newHeaderKey}
-            onInput={(e) => setNewHeaderKey((e.target as HTMLInputElement).value)}
+            onInput={(e) =>
+              setNewHeaderKey((e.target as HTMLInputElement).value)
+            }
             placeholder="Header-Name"
             class="input w-1/3"
           />
           <input
             type="text"
             value={newHeaderValue}
-            onInput={(e) => setNewHeaderValue((e.target as HTMLInputElement).value)}
+            onInput={(e) =>
+              setNewHeaderValue((e.target as HTMLInputElement).value)
+            }
             placeholder="Header value"
             class="input flex-1"
-            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addHeader())}
+            onKeyPress={(e) =>
+              e.key === "Enter" && (e.preventDefault(), addHeader())
+            }
           />
-          <button type="button" onClick={addHeader} class="btn btn-secondary">Add</button>
+          <button type="button" onClick={addHeader} class="btn btn-secondary">
+            Add
+          </button>
         </div>
       </div>
 
@@ -428,21 +550,27 @@ function ReverseProxyConfig({ config, onChange }: { config: any; onChange: (c: a
         <div class="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => addHeaderPreset('X-Real-IP', '{http.request.remote.host}')}
+            onClick={() =>
+              addHeaderPreset("X-Real-IP", "{http.request.remote.host}")
+            }
             class="btn btn-secondary text-sm"
           >
             + X-Real-IP
           </button>
           <button
             type="button"
-            onClick={() => addHeaderPreset('X-Forwarded-Proto', '{http.request.scheme}')}
+            onClick={() =>
+              addHeaderPreset("X-Forwarded-Proto", "{http.request.scheme}")
+            }
             class="btn btn-secondary text-sm"
           >
             + X-Forwarded-Proto
           </button>
           <button
             type="button"
-            onClick={() => addHeaderPreset('Host', '{http.reverse_proxy.upstream.hostport}')}
+            onClick={() =>
+              addHeaderPreset("Host", "{http.reverse_proxy.upstream.hostport}")
+            }
             class="btn btn-secondary text-sm"
           >
             + Preserve Host
@@ -453,28 +581,40 @@ function ReverseProxyConfig({ config, onChange }: { config: any; onChange: (c: a
   );
 }
 
-function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any) => void }) {
-  const [newIndex, setNewIndex] = useState('');
-  const [newHide, setNewHide] = useState('');
+function FileServerConfig({
+  config,
+  onChange,
+}: {
+  config: FileServerConfigData;
+  onChange: (c: FileServerConfigData) => void;
+}) {
+  const [newIndex, setNewIndex] = useState("");
+  const [newHide, setNewHide] = useState("");
 
   const addIndex = () => {
     if (!newIndex.trim()) return;
     onChange({ ...config, index: [...(config.index || []), newIndex.trim()] });
-    setNewIndex('');
+    setNewIndex("");
   };
 
   const removeIndex = (index: number) => {
-    onChange({ ...config, index: config.index.filter((_: any, i: number) => i !== index) });
+    onChange({
+      ...config,
+      index: (config.index || []).filter((_, i) => i !== index),
+    });
   };
 
   const addHide = () => {
     if (!newHide.trim()) return;
     onChange({ ...config, hide: [...(config.hide || []), newHide.trim()] });
-    setNewHide('');
+    setNewHide("");
   };
 
   const removeHide = (index: number) => {
-    onChange({ ...config, hide: config.hide.filter((_: any, i: number) => i !== index) });
+    onChange({
+      ...config,
+      hide: (config.hide || []).filter((_, i) => i !== index),
+    });
   };
 
   return (
@@ -484,8 +624,10 @@ function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any
         <label class="label">Root Directory *</label>
         <input
           type="text"
-          value={config.root || ''}
-          onInput={(e) => onChange({ ...config, root: (e.target as HTMLInputElement).value })}
+          value={config.root || ""}
+          onInput={(e) =>
+            onChange({ ...config, root: (e.target as HTMLInputElement).value })
+          }
           placeholder="/var/www/html"
           class="input"
           required
@@ -501,12 +643,19 @@ function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any
           <input
             type="checkbox"
             checked={config.browse || false}
-            onChange={(e) => onChange({ ...config, browse: (e.target as HTMLInputElement).checked })}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                browse: (e.target as HTMLInputElement).checked,
+              })
+            }
             class="w-5 h-5 rounded bg-slate-900 border-slate-700"
           />
           <div>
             <div class="font-medium">Enable Directory Listing</div>
-            <div class="text-sm text-slate-500">Show a list of files when visiting a directory</div>
+            <div class="text-sm text-slate-500">
+              Show a list of files when visiting a directory
+            </div>
           </div>
         </label>
       </div>
@@ -517,12 +666,19 @@ function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any
           <input
             type="checkbox"
             checked={config.precompressed || false}
-            onChange={(e) => onChange({ ...config, precompressed: (e.target as HTMLInputElement).checked })}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                precompressed: (e.target as HTMLInputElement).checked,
+              })
+            }
             class="w-5 h-5 rounded bg-slate-900 border-slate-700"
           />
           <div>
             <div class="font-medium">Serve Precompressed Files</div>
-            <div class="text-sm text-slate-500">Serve .gz/.br files if available (e.g., app.js.gz)</div>
+            <div class="text-sm text-slate-500">
+              Serve .gz/.br files if available (e.g., app.js.gz)
+            </div>
           </div>
         </label>
       </div>
@@ -538,7 +694,11 @@ function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any
           {(config.index || []).map((file: string, index: number) => (
             <div key={index} class="flex items-center gap-2">
               <input type="text" value={file} class="input flex-1" readOnly />
-              <button type="button" onClick={() => removeIndex(index)} class="btn btn-danger">
+              <button
+                type="button"
+                onClick={() => removeIndex(index)}
+                class="btn btn-danger"
+              >
                 Remove
               </button>
             </div>
@@ -552,9 +712,13 @@ function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any
             onInput={(e) => setNewIndex((e.target as HTMLInputElement).value)}
             placeholder="index.html"
             class="input flex-1"
-            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addIndex())}
+            onKeyPress={(e) =>
+              e.key === "Enter" && (e.preventDefault(), addIndex())
+            }
           />
-          <button type="button" onClick={addIndex} class="btn btn-secondary">Add</button>
+          <button type="button" onClick={addIndex} class="btn btn-secondary">
+            Add
+          </button>
         </div>
       </div>
 
@@ -568,8 +732,17 @@ function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any
         <div class="space-y-2 mb-2">
           {(config.hide || []).map((pattern: string, index: number) => (
             <div key={index} class="flex items-center gap-2">
-              <input type="text" value={pattern} class="input flex-1" readOnly />
-              <button type="button" onClick={() => removeHide(index)} class="btn btn-danger">
+              <input
+                type="text"
+                value={pattern}
+                class="input flex-1"
+                readOnly
+              />
+              <button
+                type="button"
+                onClick={() => removeHide(index)}
+                class="btn btn-danger"
+              >
                 Remove
               </button>
             </div>
@@ -583,30 +756,43 @@ function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any
             onInput={(e) => setNewHide((e.target as HTMLInputElement).value)}
             placeholder=".*"
             class="input flex-1"
-            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addHide())}
+            onKeyPress={(e) =>
+              e.key === "Enter" && (e.preventDefault(), addHide())
+            }
           />
-          <button type="button" onClick={addHide} class="btn btn-secondary">Add</button>
+          <button type="button" onClick={addHide} class="btn btn-secondary">
+            Add
+          </button>
         </div>
 
         {/* Quick hide presets */}
         <div class="flex flex-wrap gap-2 mt-2">
           <button
             type="button"
-            onClick={() => onChange({ ...config, hide: [...(config.hide || []), '.*'] })}
+            onClick={() =>
+              onChange({ ...config, hide: [...(config.hide || []), ".*"] })
+            }
             class="btn btn-secondary text-sm"
           >
             + Dotfiles (.*)
           </button>
           <button
             type="button"
-            onClick={() => onChange({ ...config, hide: [...(config.hide || []), '*.md'] })}
+            onClick={() =>
+              onChange({ ...config, hide: [...(config.hide || []), "*.md"] })
+            }
             class="btn btn-secondary text-sm"
           >
             + Markdown (*.md)
           </button>
           <button
             type="button"
-            onClick={() => onChange({ ...config, hide: [...(config.hide || []), 'node_modules'] })}
+            onClick={() =>
+              onChange({
+                ...config,
+                hide: [...(config.hide || []), "node_modules"],
+              })
+            }
             class="btn btn-secondary text-sm"
           >
             + node_modules
@@ -617,15 +803,23 @@ function FileServerConfig({ config, onChange }: { config: any; onChange: (c: any
   );
 }
 
-function RedirectConfig({ config, onChange }: { config: any; onChange: (c: any) => void }) {
+function RedirectConfig({
+  config,
+  onChange,
+}: {
+  config: RedirectConfigData;
+  onChange: (c: RedirectConfigData) => void;
+}) {
   return (
     <div class="space-y-6">
       <div>
         <label class="label">Redirect To *</label>
         <input
           type="text"
-          value={config.to || ''}
-          onInput={(e) => onChange({ ...config, to: (e.target as HTMLInputElement).value })}
+          value={config.to || ""}
+          onInput={(e) =>
+            onChange({ ...config, to: (e.target as HTMLInputElement).value })
+          }
           placeholder="https://example.com{uri}"
           class="input"
           required
@@ -640,27 +834,27 @@ function RedirectConfig({ config, onChange }: { config: any; onChange: (c: any) 
         <label class="label mb-2">Available Placeholders</label>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
           <div>
-            <code class="text-primary-400">{'{uri}'}</code>
+            <code class="text-primary-400">{"{uri}"}</code>
             <span class="text-slate-400 ml-2">Full path + query string</span>
           </div>
           <div>
-            <code class="text-primary-400">{'{path}'}</code>
+            <code class="text-primary-400">{"{path}"}</code>
             <span class="text-slate-400 ml-2">Just the path</span>
           </div>
           <div>
-            <code class="text-primary-400">{'{query}'}</code>
+            <code class="text-primary-400">{"{query}"}</code>
             <span class="text-slate-400 ml-2">Just the query string</span>
           </div>
           <div>
-            <code class="text-primary-400">{'{host}'}</code>
+            <code class="text-primary-400">{"{host}"}</code>
             <span class="text-slate-400 ml-2">Original hostname</span>
           </div>
           <div>
-            <code class="text-primary-400">{'{scheme}'}</code>
+            <code class="text-primary-400">{"{scheme}"}</code>
             <span class="text-slate-400 ml-2">http or https</span>
           </div>
           <div>
-            <code class="text-primary-400">{'{port}'}</code>
+            <code class="text-primary-400">{"{port}"}</code>
             <span class="text-slate-400 ml-2">Server port</span>
           </div>
         </div>
@@ -672,14 +866,16 @@ function RedirectConfig({ config, onChange }: { config: any; onChange: (c: any) 
         <div class="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => onChange({ ...config, to: 'https://{host}{uri}' })}
+            onClick={() => onChange({ ...config, to: "https://{host}{uri}" })}
             class="btn btn-secondary text-sm"
           >
             HTTP to HTTPS
           </button>
           <button
             type="button"
-            onClick={() => onChange({ ...config, to: 'https://www.{host}{uri}' })}
+            onClick={() =>
+              onChange({ ...config, to: "https://www.{host}{uri}" })
+            }
             class="btn btn-secondary text-sm"
           >
             Add www prefix
@@ -687,8 +883,12 @@ function RedirectConfig({ config, onChange }: { config: any; onChange: (c: any) 
           <button
             type="button"
             onClick={() => {
-              const host = config.to?.match(/https?:\/\/([^/]+)/)?.[1] || 'example.com';
-              onChange({ ...config, to: `https://${host.replace(/^www\./, '')}{uri}` });
+              const host =
+                config.to?.match(/https?:\/\/([^/]+)/)?.[1] || "example.com";
+              onChange({
+                ...config,
+                to: `https://${host.replace(/^www\./, "")}{uri}`,
+              });
             }}
             class="btn btn-secondary text-sm"
           >
@@ -701,13 +901,22 @@ function RedirectConfig({ config, onChange }: { config: any; onChange: (c: any) 
         <label class="label">Redirect Type</label>
         <select
           value={config.code || 302}
-          onChange={(e) => onChange({ ...config, code: parseInt((e.target as HTMLSelectElement).value) })}
+          onChange={(e) =>
+            onChange({
+              ...config,
+              code: parseInt((e.target as HTMLSelectElement).value),
+            })
+          }
           class="input"
         >
           <option value={301}>301 - Permanent (cached by browsers)</option>
           <option value={302}>302 - Temporary (default)</option>
-          <option value={307}>307 - Temporary (preserve POST/PUT method)</option>
-          <option value={308}>308 - Permanent (preserve POST/PUT method)</option>
+          <option value={307}>
+            307 - Temporary (preserve POST/PUT method)
+          </option>
+          <option value={308}>
+            308 - Permanent (preserve POST/PUT method)
+          </option>
         </select>
         <p class="text-sm text-slate-500 mt-1">
           Use 301/308 for permanent moves, 302/307 for temporary redirects

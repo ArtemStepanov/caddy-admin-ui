@@ -1,5 +1,7 @@
 # Contract: Import Safety and Route Editor
 
+> **Archived contract:** the import endpoints below no longer exist. Managed setup now uses `/api/setup/preview` and `/api/setup/confirm`; see the root README for the current contract.
+
 This feature changes no endpoint paths and adds no response fields. It consolidates the existing behavior below.
 
 ## `POST /api/import-preview` and `POST /api/import`

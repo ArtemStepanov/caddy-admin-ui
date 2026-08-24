@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/storage"
@@ -35,7 +36,60 @@ func ParseCaddyConfig(cfg *CaddyConfig) ([]*storage.Route, error) {
 const (
 	readOnlyPartialReason     = "contains unsupported middleware or route structure"
 	readOnlyUnsupportedReason = "unknown or unsupported handler"
+	externalRouteReason       = "preserved from Caddy and not owned by Caddy Admin UI"
 )
+
+// ParseCaddyRoutes parses a single server's route array without first narrowing the
+// JSON schema. External routes keep their exact raw JSON and are read-only. Only
+// routes carrying our stable @id marker may become editable again.
+func ParseCaddyRoutes(raw json.RawMessage) ([]*storage.Route, error) {
+	var rawRoutes []json.RawMessage
+	if len(raw) == 0 || string(raw) == "null" {
+		return []*storage.Route{}, nil
+	}
+	if err := json.Unmarshal(raw, &rawRoutes); err != nil {
+		return nil, fmt.Errorf("parse Caddy route array: %w", err)
+	}
+
+	routes := make([]*storage.Route, 0, len(rawRoutes))
+	managedIDs := make(map[string]bool)
+	for position, rawRoute := range rawRoutes {
+		var caddyRoute Route
+		if err := json.Unmarshal(rawRoute, &caddyRoute); err != nil {
+			return nil, fmt.Errorf("parse Caddy route %d: %w", position, err)
+		}
+		parsed, err := parseRoute(caddyRoute)
+		if err != nil {
+			parsed = createRawRoute(caddyRoute)
+		}
+		parsed.Position = position
+		parsed.RawCaddyRoute = append(json.RawMessage(nil), rawRoute...)
+
+		if strings.HasPrefix(caddyRoute.ID, ManagedRouteIDPrefix) {
+			storedID := strings.TrimPrefix(caddyRoute.ID, ManagedRouteIDPrefix)
+			_, validID := uuid.Parse(storedID)
+			if validID == nil && !managedIDs[storedID] {
+				parsed.ID = storedID
+				managedIDs[storedID] = true
+				if parsed.SupportStatus == storage.SupportStatusEditable {
+					parsed.RawCaddyRoute = nil
+					parsed.ReadOnly = false
+					parsed.ReadOnlyReason = ""
+				}
+			} else {
+				markReadOnly(parsed, storage.SupportStatusPartialReadOnly, externalRouteReason)
+			}
+		} else {
+			status := parsed.SupportStatus
+			if status == "" || status == storage.SupportStatusEditable {
+				status = storage.SupportStatusPartialReadOnly
+			}
+			markReadOnly(parsed, status, externalRouteReason)
+		}
+		routes = append(routes, parsed)
+	}
+	return routes, nil
+}
 
 func markEditable(route *storage.Route) {
 	route.RawCaddyRoute = nil

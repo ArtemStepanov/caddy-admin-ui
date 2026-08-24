@@ -1,26 +1,28 @@
 services:
   # Caddy Admin UI
-  orchestrator:
+  admin-ui:
     image: ghcr.io/artemstepanov/caddy-admin-ui:latest
     # build: .  # uncomment for local development
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - CADDY_ADMIN_URL=http://caddy:2019
       - DB_PATH=/app/data/routes.db
+      - LISTEN_ADDR=0.0.0.0:3000
+      # Safe because the published UI port above is loopback-only.
+      - ALLOW_INSECURE_NO_AUTH=true
     volumes:
-      - orchestrator-data:/app/data
+      - admin-ui-data:/app/data
     depends_on:
       - caddy
     restart: unless-stopped
 
   # Test Caddy instance
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11.4-alpine
     ports:
-      - "80:80"
-      - "443:443"
-      - "2019:2019"
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
     volumes:
       - caddy-data:/data
       - caddy-config:/config
@@ -38,7 +40,7 @@ configs:
       }
 
       app.localhost {
-        reverse_proxy http://orchestrator:3000
+        reverse_proxy http://admin-ui:3000
       }
 
       files.localhost {
@@ -51,6 +53,6 @@ configs:
       }
 
 volumes:
-  orchestrator-data:
+  admin-ui-data:
   caddy-data:
   caddy-config:

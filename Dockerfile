@@ -1,5 +1,5 @@
 # Build frontend
-FROM node:26-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 WORKDIR /app/web
 
@@ -12,7 +12,7 @@ COPY web/ ./
 RUN npm run build
 
 # Build backend
-FROM golang:1.26-alpine AS backend-builder
+FROM golang:1.25.13-alpine AS backend-builder
 
 # Install build dependencies
 RUN apk add --no-cache gcc musl-dev sqlite-dev
@@ -33,31 +33,34 @@ RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w -X github.com/ArtemStepano
 FROM alpine:3.24
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates sqlite-libs tzdata
+RUN apk add --no-cache ca-certificates sqlite-libs tzdata \
+    && addgroup -S caddy-admin-ui \
+    && adduser -S -G caddy-admin-ui -h /app caddy-admin-ui
 
 WORKDIR /app
 
 # Copy binary
-COPY --from=backend-builder /app/caddy-admin-ui .
+COPY --from=backend-builder --chown=caddy-admin-ui:caddy-admin-ui /app/caddy-admin-ui .
 
 # Copy frontend
-COPY --from=frontend-builder /app/web/dist ./web/dist
+COPY --from=frontend-builder --chown=caddy-admin-ui:caddy-admin-ui /app/web/dist ./web/dist
 
 # Create data directory
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && chown caddy-admin-ui:caddy-admin-ui /app/data
 
 # Environment variables
 ENV GIN_MODE=release
 ENV DB_PATH=/app/data/routes.db
 ENV CADDY_ADMIN_URL=http://localhost:2019
-ENV LISTEN_ADDR=0.0.0.0:3000
+ENV LISTEN_ADDR=127.0.0.1:3000
 
 # Expose port
 EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/status || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/healthz || exit 1
 
 # Run
+USER caddy-admin-ui
 CMD ["./caddy-admin-ui"]

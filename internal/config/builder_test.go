@@ -31,8 +31,8 @@ func TestBuildCaddyConfig_ReadOnlyRawRouteUnchanged(t *testing.T) {
 func TestBuildCaddyConfig_Empty(t *testing.T) {
 	cfg := BuildCaddyConfig(nil, nil)
 
-	if cfg.Admin == nil || cfg.Admin.Listen != "0.0.0.0:2019" {
-		t.Error("Expected admin listener on 0.0.0.0:2019")
+	if cfg.Admin != nil {
+		t.Error("full config builder must not force an admin listener")
 	}
 	if cfg.Apps != nil {
 		t.Error("Expected no apps when no routes")
@@ -85,8 +85,8 @@ func TestBuildCaddyConfig_ReverseProxy(t *testing.T) {
 		t.Fatal("Expected server srv0")
 	}
 
-	if len(server.Listen) != 2 || server.Listen[0] != ":443" {
-		t.Errorf("Expected listen [:443, :80], got %v", server.Listen)
+	if len(server.Listen) != 0 {
+		t.Errorf("Detached route fixture must not force listeners, got %v", server.Listen)
 	}
 
 	if len(server.Routes) != 1 {
@@ -298,7 +298,7 @@ func TestBuildCaddyConfig_GlobalEncode(t *testing.T) {
 	}
 }
 
-func TestBuildCaddyConfig_SortsByDomain(t *testing.T) {
+func TestBuildCaddyConfig_PreservesRouteOrder(t *testing.T) {
 	routes := []*storage.Route{
 		{
 			Domain:      "z.example.com",
@@ -321,9 +321,8 @@ func TestBuildCaddyConfig_SortsByDomain(t *testing.T) {
 		t.Fatalf("Expected 2 routes, got %d", len(caddyRoutes))
 	}
 
-	// Should be sorted by domain
-	if caddyRoutes[0].Match[0].Host[0] != "a.example.com" {
-		t.Errorf("Expected first route to be a.example.com, got %v", caddyRoutes[0].Match[0].Host)
+	if caddyRoutes[0].Match[0].Host[0] != "z.example.com" {
+		t.Errorf("Expected first route to preserve z.example.com, got %v", caddyRoutes[0].Match[0].Host)
 	}
 }
 

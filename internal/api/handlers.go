@@ -1,16 +1,18 @@
 package api
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/caddy"
-	"github.com/ArtemStepanov/caddy-admin-ui/internal/config"
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/storage"
 	"github.com/ArtemStepanov/caddy-admin-ui/internal/version"
 )
@@ -46,38 +48,8 @@ func validateCaddyURL(rawURL string) error {
 }
 
 const (
-	driftWarning     = "Manual Caddy changes after the last import or sync are not automatically merged. Re-run import review before syncing after manual edits."
-	recoveryGuidance = "Local routes are unchanged. Fix Caddy connectivity or re-run import review before syncing again."
+	recoveryGuidance = "Review the live managed route array and latest snapshot before retrying; run setup again if ownership or the ETag changed."
 )
-
-type importSummary struct {
-	TotalFound        int  `json:"total_found"`
-	Editable          int  `json:"editable"`
-	ReadOnlyPreserved int  `json:"readonly_preserved"`
-	Unsupported       int  `json:"unsupported"`
-	LocalOnly         int  `json:"local_only"`
-	WillUpdate        int  `json:"will_update"`
-	WillReplaceLocal  bool `json:"will_replace_local"`
-}
-
-type importGroups struct {
-	NewFromCaddy      []importRouteRow `json:"new_from_caddy"`
-	WillUpdate        []importRouteRow `json:"will_update"`
-	LocalOnly         []importRouteRow `json:"local_only"`
-	ReadOnlyPreserved []importRouteRow `json:"readonly_preserved"`
-}
-
-type importRouteRow struct {
-	RouteID        string          `json:"route_id,omitempty"`
-	Domain         string          `json:"domain"`
-	Path           string          `json:"path,omitempty"`
-	HandlerType    string          `json:"handler_type"`
-	Destination    string          `json:"destination,omitempty"`
-	SupportStatus  string          `json:"support_status"`
-	ReadOnlyReason string          `json:"readonly_reason,omitempty"`
-	RawCaddyRoute  json.RawMessage `json:"raw_caddy_route,omitempty"`
-	ChangeType     string          `json:"change_type"`
-}
 
 // Handler contains all HTTP handlers
 type Handler struct {
@@ -85,6 +57,8 @@ type Handler struct {
 	defaultCaddyURL string // fallback URL from env
 	lastSyncedAt    time.Time
 	lastSyncError   string
+	syncMu          sync.Mutex
+	statusMu        sync.RWMutex
 }
 
 // NewHandler creates a new handler
@@ -132,149 +106,6 @@ func syncWarning(message string, err error) gin.H {
 	}
 }
 
-func routeKey(route *storage.Route) string {
-	return route.Domain + "\x00" + route.Path + "\x00" + route.HandlerType
-}
-
-func routeDestination(route *storage.Route) string {
-	switch route.HandlerType {
-	case "reverse_proxy":
-		var cfg storage.ReverseProxyConfig
-		if json.Unmarshal(route.Config, &cfg) == nil && len(cfg.Upstreams) > 0 {
-			return cfg.Upstreams[0]
-		}
-	case "file_server":
-		var cfg storage.FileServerConfig
-		if json.Unmarshal(route.Config, &cfg) == nil {
-			return cfg.Root
-		}
-	case "redir":
-		var cfg storage.RedirectConfig
-		if json.Unmarshal(route.Config, &cfg) == nil {
-			return cfg.To
-		}
-	}
-	return ""
-}
-
-func routeDisplayDomain(route *storage.Route, destination string) string {
-	if route.Domain != "" && route.Domain != "*" && route.Domain != "UNKNOWN" {
-		return route.Domain
-	}
-	if route.Path != "" {
-		return route.Path
-	}
-	if destination != "" {
-		return destination
-	}
-	return "unknown route"
-}
-
-func routeRow(route *storage.Route, changeType string) importRouteRow {
-	destination := routeDestination(route)
-	row := importRouteRow{
-		RouteID:        route.ID,
-		Domain:         routeDisplayDomain(route, destination),
-		Path:           route.Path,
-		HandlerType:    route.HandlerType,
-		Destination:    destination,
-		SupportStatus:  route.SupportStatus,
-		ReadOnlyReason: route.ReadOnlyReason,
-		ChangeType:     changeType,
-	}
-	if route.IsReadOnly() {
-		row.RawCaddyRoute = route.RawCaddyRoute
-	}
-	return row
-}
-
-func preserveMatchingLocalIDs(routes, localRoutes []*storage.Route) {
-	locals := map[string]*storage.Route{}
-	for _, route := range localRoutes {
-		locals[routeKey(route)] = route
-	}
-	for _, route := range routes {
-		key := routeKey(route)
-		if local := locals[key]; local != nil {
-			route.ID = local.ID
-			route.CreatedAt = local.CreatedAt
-			delete(locals, key)
-		}
-	}
-}
-
-func buildImportPreview(routes, localRoutes []*storage.Route) (importSummary, importGroups) {
-	locals := map[string]*storage.Route{}
-	seen := map[string]bool{}
-	for _, route := range localRoutes {
-		locals[routeKey(route)] = route
-	}
-
-	summary := importSummary{TotalFound: len(routes), WillReplaceLocal: true}
-	groups := importGroups{
-		NewFromCaddy:      []importRouteRow{},
-		WillUpdate:        []importRouteRow{},
-		LocalOnly:         []importRouteRow{},
-		ReadOnlyPreserved: []importRouteRow{},
-	}
-	for _, route := range routes {
-		key := routeKey(route)
-		seen[key] = true
-		if route.SupportStatus == storage.SupportStatusEditable {
-			summary.Editable++
-			row := routeRow(route, "new")
-			if local := locals[key]; local != nil {
-				row.RouteID = local.ID
-				row.ChangeType = "update"
-				summary.WillUpdate++
-				groups.WillUpdate = append(groups.WillUpdate, row)
-			} else {
-				groups.NewFromCaddy = append(groups.NewFromCaddy, row)
-			}
-			continue
-		}
-
-		summary.ReadOnlyPreserved++
-		if route.SupportStatus == storage.SupportStatusUnsupportedReadOnly {
-			summary.Unsupported++
-		}
-		row := routeRow(route, "readonly_preserve")
-		if local := locals[key]; local != nil {
-			row.RouteID = local.ID
-		}
-		groups.ReadOnlyPreserved = append(groups.ReadOnlyPreserved, row)
-	}
-
-	for _, route := range localRoutes {
-		if !seen[routeKey(route)] {
-			summary.LocalOnly++
-			groups.LocalOnly = append(groups.LocalOnly, routeRow(route, "local_only_remove"))
-		}
-	}
-	return summary, groups
-}
-
-func fetchParsedCaddyRoutes(h *Handler) ([]*storage.Route, int, error) {
-	raw, err := h.getCaddyClient().GetConfig("")
-	if err != nil {
-		return nil, http.StatusBadGateway, fmt.Errorf("failed to connect to Caddy")
-	}
-
-	var caddyConfig config.CaddyConfig
-	if err := json.Unmarshal(raw, &caddyConfig); err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse Caddy response")
-	}
-
-	routes, err := config.ParseCaddyConfig(&caddyConfig)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to parse Caddy config")
-	}
-	if err := config.ValidateRoutesForBuild(routes); err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to validate Caddy routes: %w", err)
-	}
-	return routes, http.StatusOK, nil
-}
-
 // ListRoutes returns all routes
 func (h *Handler) ListRoutes(c *gin.Context) {
 	routes, err := h.store.ListRoutes()
@@ -307,18 +138,23 @@ func (h *Handler) CreateRoute(c *gin.Context) {
 	}
 
 	route.Enabled = true // New routes are enabled by default
+	route.ID = uuid.NewString()
+	route.CreatedAt = time.Time{}
+	route.UpdatedAt = time.Time{}
 	makeEditableRoute(&route)
 
-	if err := h.store.CreateRoute(&route); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Auto-sync to Caddy
-	if err := h.syncToCaddy(); err != nil {
-		resp := syncWarning("Route created but sync to Caddy failed", err)
+	err := h.mutateRoutes("create route", func(routes []*storage.Route) ([]*storage.Route, error) {
+		route.Position = len(routes)
+		return append(routes, &route), nil
+	})
+	if errors.Is(err, errSetupRequired) {
+		resp := syncWarning("Route saved as a local draft; Caddy setup is not complete", err)
 		resp["route"] = route
 		c.JSON(http.StatusCreated, resp)
+		return
+	}
+	if err != nil {
+		c.JSON(mutationErrorStatus(err), gin.H{"error": err.Error(), "recovery_guidance": recoveryGuidance})
 		return
 	}
 
@@ -364,16 +200,24 @@ func (h *Handler) UpdateRoute(c *gin.Context) {
 	route.Enabled = existing.Enabled
 	makeEditableRoute(&route)
 
-	if err := h.store.UpdateRoute(&route); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Auto-sync to Caddy
-	if err := h.syncToCaddy(); err != nil {
-		resp := syncWarning("Route updated but sync to Caddy failed", err)
+	err = h.mutateRoutes("update route", func(routes []*storage.Route) ([]*storage.Route, error) {
+		for i, candidate := range routes {
+			if candidate.ID == id {
+				route.Position = candidate.Position
+				routes[i] = &route
+				return routes, nil
+			}
+		}
+		return nil, fmt.Errorf("route not found")
+	})
+	if errors.Is(err, errSetupRequired) {
+		resp := syncWarning("Route saved as a local draft; Caddy setup is not complete", err)
 		resp["route"] = route
 		c.JSON(http.StatusOK, resp)
+		return
+	}
+	if err != nil {
+		c.JSON(mutationErrorStatus(err), gin.H{"error": err.Error(), "recovery_guidance": recoveryGuidance})
 		return
 	}
 
@@ -394,16 +238,22 @@ func (h *Handler) DeleteRoute(c *gin.Context) {
 		return
 	}
 
-	if err := h.store.DeleteRoute(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Auto-sync to Caddy
-	if err := h.syncToCaddy(); err != nil {
-		resp := syncWarning("Route deleted but sync to Caddy failed", err)
+	err = h.mutateRoutes("delete route", func(routes []*storage.Route) ([]*storage.Route, error) {
+		for i, candidate := range routes {
+			if candidate.ID == id {
+				return append(routes[:i], routes[i+1:]...), nil
+			}
+		}
+		return nil, fmt.Errorf("route not found")
+	})
+	if errors.Is(err, errSetupRequired) {
+		resp := syncWarning("Local draft deleted; Caddy setup is not complete", err)
 		resp["message"] = resp["warning"]
 		c.JSON(http.StatusOK, resp)
+		return
+	}
+	if err != nil {
+		c.JSON(mutationErrorStatus(err), gin.H{"error": err.Error(), "recovery_guidance": recoveryGuidance})
 		return
 	}
 
@@ -424,18 +274,24 @@ func (h *Handler) ToggleRoute(c *gin.Context) {
 		return
 	}
 
-	route.Enabled = !route.Enabled
-
-	if err := h.store.UpdateRoute(route); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Auto-sync to Caddy
-	if err := h.syncToCaddy(); err != nil {
-		resp := syncWarning("Route toggled but sync to Caddy failed", err)
+	err = h.mutateRoutes("toggle route", func(routes []*storage.Route) ([]*storage.Route, error) {
+		for _, candidate := range routes {
+			if candidate.ID == id {
+				candidate.Enabled = !candidate.Enabled
+				route = candidate
+				return routes, nil
+			}
+		}
+		return nil, fmt.Errorf("route not found")
+	})
+	if errors.Is(err, errSetupRequired) {
+		resp := syncWarning("Route updated as a local draft; Caddy setup is not complete", err)
 		resp["route"] = route
 		c.JSON(http.StatusOK, resp)
+		return
+	}
+	if err != nil {
+		c.JSON(mutationErrorStatus(err), gin.H{"error": err.Error(), "recovery_guidance": recoveryGuidance})
 		return
 	}
 
@@ -470,6 +326,24 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 		}
 	}
 
+	existing, err := h.store.GetGlobalConfig()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	existingURL := existing.CaddyAdminURL
+	if existingURL == "" {
+		existingURL = h.defaultCaddyURL
+	}
+	// Ownership and concurrency state can only be changed by the setup flow.
+	cfg.ManagedServer = ""
+	cfg.SetupComplete = false
+	cfg.LastETag = ""
+	if strings.TrimRight(existingURL, "/") == strings.TrimRight(cfg.CaddyAdminURL, "/") {
+		cfg.ManagedServer = existing.ManagedServer
+		cfg.SetupComplete = existing.SetupComplete
+		cfg.LastETag = existing.LastETag
+	}
 	if err := h.store.SetGlobalConfig(&cfg); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -482,22 +356,31 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 func (h *Handler) GetStatus(c *gin.Context) {
 	caddyClient := h.getCaddyClient()
 	caddyURL := h.getCaddyURL()
+	globalCfg, _ := h.store.GetGlobalConfig()
+	setupComplete := globalCfg != nil && globalCfg.SetupComplete
+	managedServer := ""
+	if globalCfg != nil {
+		managedServer = globalCfg.ManagedServer
+	}
 
 	start := time.Now()
 	err := caddyClient.Health()
 	latency := time.Since(start).Milliseconds()
+	lastSyncedAt, lastSyncError := h.getSyncStatus()
 
 	if err != nil {
 		resp := gin.H{
-			"status":    "offline",
-			"error":     err.Error(),
-			"latency":   latency,
-			"admin_url": caddyURL,
-			"version":   version.Version,
+			"status":         "offline",
+			"error":          err.Error(),
+			"latency":        latency,
+			"admin_url":      caddyURL,
+			"version":        version.Version,
+			"setup_complete": setupComplete,
+			"managed_server": managedServer,
 		}
-		if !h.lastSyncedAt.IsZero() {
-			resp["last_synced_at"] = h.lastSyncedAt.Format(time.RFC3339)
-			resp["last_sync_error"] = h.lastSyncError
+		if !lastSyncedAt.IsZero() {
+			resp["last_synced_at"] = lastSyncedAt.Format(time.RFC3339)
+			resp["last_sync_error"] = lastSyncError
 		}
 		c.JSON(http.StatusOK, resp)
 		return
@@ -511,15 +394,17 @@ func (h *Handler) GetStatus(c *gin.Context) {
 	}
 
 	resp := gin.H{
-		"status":      "online",
-		"latency":     latency,
-		"admin_url":   caddyURL,
-		"route_count": routeCount,
-		"version":     version.Version,
+		"status":         "online",
+		"latency":        latency,
+		"admin_url":      caddyURL,
+		"route_count":    routeCount,
+		"version":        version.Version,
+		"setup_complete": setupComplete,
+		"managed_server": managedServer,
 	}
-	if !h.lastSyncedAt.IsZero() {
-		resp["last_synced_at"] = h.lastSyncedAt.Format(time.RFC3339)
-		resp["last_sync_error"] = h.lastSyncError
+	if !lastSyncedAt.IsZero() {
+		resp["last_synced_at"] = lastSyncedAt.Format(time.RFC3339)
+		resp["last_sync_error"] = lastSyncError
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -529,7 +414,7 @@ func (h *Handler) SyncToCaddy(c *gin.Context) {
 	if err := h.syncToCaddy(); err != nil {
 		resp := syncWarning("Sync to Caddy failed", err)
 		resp["error"] = err.Error()
-		c.JSON(http.StatusInternalServerError, resp)
+		c.JSON(mutationErrorStatus(err), resp)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "synced successfully"})
@@ -571,94 +456,32 @@ func (h *Handler) TestConnection(c *gin.Context) {
 	})
 }
 
-// syncToCaddy builds config from routes and loads it into Caddy
+// syncToCaddy updates only the selected HTTP server's route array.
 func (h *Handler) syncToCaddy() error {
+	h.syncMu.Lock()
+	defer h.syncMu.Unlock()
 	routes, err := h.store.ListRoutes()
 	if err != nil {
-		h.lastSyncedAt = time.Now()
-		h.lastSyncError = err.Error()
+		h.setSyncStatus(err)
 		return err
 	}
 
 	globalCfg, err := h.store.GetGlobalConfig()
 	if err != nil {
-		h.lastSyncedAt = time.Now()
-		h.lastSyncError = err.Error()
+		h.setSyncStatus(err)
 		return err
 	}
-
-	if err := config.ValidateRoutesForBuild(routes); err != nil {
-		h.lastSyncedAt = time.Now()
-		h.lastSyncError = err.Error()
-		return err
-	}
-
-	// Build Caddy config from routes
-	caddyConfig := config.BuildCaddyConfig(routes, globalCfg)
-
-	// Pretty print for debugging
-	data, _ := json.MarshalIndent(caddyConfig, "", "  ")
-	_ = data // Could log this if needed
-
-	// Load into Caddy using dynamic client
-	err = h.getCaddyClient().LoadConfig(caddyConfig)
-	h.lastSyncedAt = time.Now()
-	if err != nil {
-		h.lastSyncError = err.Error()
-	} else {
-		h.lastSyncError = ""
-	}
-	return err
+	return h.syncRoutesLocked(routes, "manual sync", globalCfg)
 }
 
-// PreviewImport returns what would be imported from Caddy
-func (h *Handler) PreviewImport(c *gin.Context) {
-	routes, status, err := fetchParsedCaddyRoutes(h)
-	if err != nil {
-		c.JSON(status, gin.H{"error": err.Error()})
-		return
+func mutationErrorStatus(err error) int {
+	if errors.Is(err, errInvalidRoutes) {
+		return http.StatusBadRequest
 	}
-	localRoutes, err := h.store.ListRoutes()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read local routes"})
-		return
+	if errors.Is(err, errSetupRequired) || errors.Is(err, errConfigDrift) {
+		return http.StatusConflict
 	}
-	summary, groups := buildImportPreview(routes, localRoutes)
-	c.JSON(http.StatusOK, gin.H{
-		"summary":  summary,
-		"groups":   groups,
-		"warnings": []string{driftWarning},
-	})
-}
-
-// ImportFromCaddy pulls config from Caddy and overwrites local routes
-func (h *Handler) ImportFromCaddy(c *gin.Context) {
-	routes, status, err := fetchParsedCaddyRoutes(h)
-	if err != nil {
-		c.JSON(status, gin.H{"error": err.Error(), "recovery_guidance": recoveryGuidance})
-		return
-	}
-	localRoutes, err := h.store.ListRoutes()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read local routes", "recovery_guidance": recoveryGuidance})
-		return
-	}
-	preserveMatchingLocalIDs(routes, localRoutes)
-
-	if err := h.store.ReplaceAllRoutes(routes); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save imported routes", "recovery_guidance": recoveryGuidance})
-		return
-	}
-
-	summary, _ := buildImportPreview(routes, nil)
-	c.JSON(http.StatusOK, gin.H{
-		"imported":           len(routes),
-		"editable":           summary.Editable,
-		"readonly_preserved": summary.ReadOnlyPreserved,
-		"unsupported":        summary.Unsupported,
-		"message":            "Configuration imported successfully",
-		"warnings":           []string{driftWarning},
-	})
+	return http.StatusBadGateway
 }
 
 // GetRouteDetails returns preserved raw JSON for read-only routes.
