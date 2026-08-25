@@ -16,10 +16,10 @@ const baseConfig = {
   setup_complete: false,
 };
 
-describe("Settings managed setup", () => {
+describe("Settings connection flow", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("reviews ownership and confirms the content-bound preview", async () => {
+  it("reviews routes and confirms the content-bound connection", async () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url === "/api/config") return json({ config: baseConfig });
       if (url === "/api/snapshots") return json({ snapshots: [] });
@@ -66,16 +66,26 @@ describe("Settings managed setup", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<Settings />);
-    await screen.findByText("Review Caddy Servers");
-    fireEvent.click(screen.getByText("Review Caddy Servers"));
-    await screen.findByText("Ownership Review");
+    await screen.findByText("Preview Routes");
+    fireEvent.click(screen.getByText("Preview Routes"));
+    await screen.findByText("Review Connection");
+    expect(screen.getByText(/No changes have been made/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Save the current route array as the initial restore point/,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("external.example.com")).toBeInTheDocument();
-    expect(screen.getByText("preserved read-only")).toBeInTheDocument();
+    expect(screen.getAllByText("Preserved read-only")).toHaveLength(2);
     expect(screen.getByText(/ETags/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("Confirm Ownership"));
+    fireEvent.click(screen.getByText("Connect and Import"));
     await waitFor(() =>
-      expect(screen.getByText(/Connected to srv0/)).toBeInTheDocument(),
+      expect(
+        screen.getByText(
+          /Connected to srv0.*Imported 1 route.*initial restore point/,
+        ),
+      ).toBeInTheDocument(),
     );
     const confirmCall = fetchMock.mock.calls.find(
       ([url]) => url === "/api/setup/confirm",
@@ -88,50 +98,55 @@ describe("Settings managed setup", () => {
   });
 
   it("shows snapshots with export and guarded restore actions", async () => {
-    vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: string) => {
-        if (url === "/api/config")
-          return json({
-            config: {
-              ...baseConfig,
-              setup_complete: true,
-              managed_server: "srv0",
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/config")
+        return json({
+          config: {
+            ...baseConfig,
+            setup_complete: true,
+            managed_server: "srv0",
+          },
+        });
+      if (url === "/api/snapshots")
+        return json({
+          snapshots: [
+            {
+              id: "snap-1",
+              server: "srv0",
+              etag: "e1",
+              reason: "initial setup",
+              created_at: "2026-01-01T00:00:00Z",
             },
-          });
-        if (url === "/api/snapshots")
-          return json({
-            snapshots: [
-              {
-                id: "snap-1",
-                server: "srv0",
-                etag: "e1",
-                reason: "before route update",
-                created_at: "2026-01-01T00:00:00Z",
-              },
-            ],
-          });
-        if (url === "/api/snapshots/snap-1/restore")
-          return json({ message: "snapshot restored", restored: 2 });
-        return json({});
-      }),
-    );
+          ],
+        });
+      if (url === "/api/snapshots/snap-1/restore")
+        return json({ message: "snapshot restored", restored: 2 });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     render(<Settings />);
-    await screen.findByText("before route update");
+    await screen.findByText("Initial Caddy baseline");
     expect(screen.getByText("Export")).toHaveAttribute(
       "href",
       "/api/snapshots/snap-1/export",
     );
-    fireEvent.click(screen.getByText("Restore"));
-    await screen.findByText(/Snapshot restored/);
+    fireEvent.click(screen.getByText("Restore..."));
+    await screen.findByRole("dialog", { name: "Restore Caddy routes?" });
+    expect(
+      screen.getByText(/current live routes are backed up first/),
+    ).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(
+        ([url]) => url === "/api/snapshots/snap-1/restore",
+      ),
+    ).toBe(false);
+
+    fireEvent.click(screen.getByText("Restore Live Routes"));
+    await screen.findByText(/Restore complete.*2 routes now active/);
   });
 
-  it("clears stale ownership preview when refresh fails", async () => {
+  it("clears a stale connection preview when refresh fails", async () => {
     let previews = 0;
     vi.stubGlobal(
       "fetch",
@@ -161,11 +176,11 @@ describe("Settings managed setup", () => {
     );
 
     render(<Settings />);
-    await screen.findByText("Review Caddy Servers");
-    fireEvent.click(screen.getByText("Review Caddy Servers"));
-    await screen.findByText("Ownership Review");
-    fireEvent.click(screen.getByText("Review Caddy Servers"));
+    await screen.findByText("Preview Routes");
+    fireEvent.click(screen.getByText("Preview Routes"));
+    await screen.findByText("Review Connection");
+    fireEvent.click(screen.getByText("Preview Routes"));
     await screen.findByText(/Setup preview failed/);
-    expect(screen.queryByText("Ownership Review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Review Connection")).not.toBeInTheDocument();
   });
 });
