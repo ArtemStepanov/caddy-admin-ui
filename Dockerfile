@@ -12,7 +12,7 @@ COPY web/ ./
 RUN npm run build
 
 # Build backend
-FROM golang:1.25.13-alpine AS backend-builder
+FROM golang:1.27.0-alpine AS backend-builder
 
 # Install build dependencies
 RUN apk add --no-cache gcc musl-dev sqlite-dev
