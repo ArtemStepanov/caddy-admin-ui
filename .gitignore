@@ -60,3 +60,15 @@ temp/
 
 # Docker
 docker-compose.override.yml
+
+# Local agent settings and task state
+*.user.toml
+.claude/settings.local.json
+.codex/hooks.json
+.pi/tasks/
+
+# BMAD Loop runtime files and machine-specific policy
+.bmad-loop/runs/
+.bmad-loop/cache/
+.bmad-loop/policy.toml
+_bmad/render/
