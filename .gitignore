@@ -70,5 +70,6 @@ docker-compose.override.yml
 # BMAD Loop runtime files and machine-specific policy
 .bmad-loop/runs/
 .bmad-loop/cache/
+.bmad-loop/archive/
 .bmad-loop/policy.toml
 _bmad/render/
