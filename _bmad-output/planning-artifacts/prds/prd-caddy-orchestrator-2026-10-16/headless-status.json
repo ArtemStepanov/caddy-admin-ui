@@ -1,0 +1,20 @@
+{
+  "status": "partial",
+  "intent": "update",
+  "prd": "_bmad-output/planning-artifacts/prds/prd-caddy-orchestrator-2026-10-16/prd.md",
+  "addendum": "_bmad-output/planning-artifacts/prds/prd-caddy-orchestrator-2026-10-16/addendum.md",
+  "memlog": "_bmad-output/planning-artifacts/prds/prd-caddy-orchestrator-2026-10-16/.memlog.md",
+  "changes_summary": "Recorded broad homelabber audience, primary public HTTPS with supported mode/settings choice, and manager-only production Compose connected to existing Caddy. Resolved answered Q1/Q3 and primary Q2; acceptance now uses a reproducible reference service and separate Caddy test fixture.",
+  "conflicts_with_prior_decisions": [],
+  "open_questions": [
+    "D1: UX/architecture refine the exact supported alternative mode/settings menu and ownership; nonblocking, no provider-list decision requested now.",
+    "Q4: UX visual and interaction details remain within the separate UX workflow.",
+    "Q5: Implementation/release planning selects representative environment and external-Caddy backup/upgrade prerequisites.",
+    "D2: Remaining candidate feature priorities/exclusions are not yet approved as the complete implementation scope."
+  ],
+  "assumptions": [
+    "A2: Documented Compose/DNS/networking prerequisites are an acceptable setup path; routine proxy management does not require Caddy JSON expertise.",
+    "A3: Beyond confirmed audience, deployment, public HTTPS and mode choice, remaining candidate requirements/exclusions are proposals."
+  ],
+  "external_handoffs": []
+}

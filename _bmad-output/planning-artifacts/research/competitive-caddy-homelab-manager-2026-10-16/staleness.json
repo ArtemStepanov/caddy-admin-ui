@@ -1,0 +1,106 @@
+{
+  "today": "2026-10-16",
+  "claims": [
+    {
+      "claim": "[1] Proxy/TLS ease with operational visibility/recovery is a documented category pattern across independent NPM and Caddy UI maintainers [1,3,4,5]; no adoption inference.",
+      "class": "features",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-01-01",
+      "stale": false
+    },
+    {
+      "claim": "[3] X4Applegate documents validation, rollback, TLS visibility, access control and fleet capabilities; not exercised or independently corroborated.",
+      "class": "features",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-01-01",
+      "stale": false
+    },
+    {
+      "claim": "[4] zackwag documents Caddyfile-first editing with health, TLS, logs and recovery; not exercised.",
+      "class": "features",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-01-01",
+      "stale": false
+    },
+    {
+      "claim": "[5] rhad00 documents broad proxy management, auth, operational features and automation; not exercised.",
+      "class": "features",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-01-01",
+      "stale": false
+    },
+    {
+      "claim": "[6] Caddy manages HTTPS but local CA trust and persistent storage are deployment responsibilities; canonical documentation only.",
+      "class": "operations",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-01-01",
+      "stale": false
+    },
+    {
+      "claim": "[7] Scoped API with ETag guards exists; multirequest changes are not one transaction and adapt does not load config; canonical documentation only.",
+      "class": "compatibility",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-01-01",
+      "stale": false
+    },
+    {
+      "claim": "[8] API-oriented Caddy service uses resume and persisted autosave; canonical documentation only.",
+      "class": "operations",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-01-01",
+      "stale": false
+    },
+    {
+      "claim": "[9] DNS-01 enables wildcard and private-server certificate validation without inbound challenge ports; independent Caddy and Lets Encrypt docs agree.",
+      "class": "operations",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-01-01",
+      "stale": false
+    },
+    {
+      "claim": "[10] Native proxy supports WebSockets and upstream TLS controls; verification bypass removes protection; canonical documentation only.",
+      "class": "features",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-01-01",
+      "stale": false
+    },
+    {
+      "claim": "[11] A user reported opaque save errors after an upgrade and reverting versions; one firsthand account, root cause not independently verified.",
+      "class": "user-voice",
+      "pub_date": "2026-02-01",
+      "recheck": "2027-02-01",
+      "stale": false
+    },
+    {
+      "claim": "[12] A user reported opaque DNS certificate failure and difficulty locating logs, then a credential resolution; one firsthand account.",
+      "class": "user-voice",
+      "pub_date": "2026-05-01",
+      "recheck": "2027-05-01",
+      "stale": false
+    },
+    {
+      "claim": "[13] A user reports renewed certificate not served until reload; not reproduced or confirmed as current bug.",
+      "class": "user-voice",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-10-01",
+      "stale": false
+    },
+    {
+      "claim": "[14] X4Applegate release page shows October activity; activity does not prove reliability or roadmap.",
+      "class": "trajectory",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-04-01",
+      "stale": false
+    },
+    {
+      "claim": "[15] zackwag release page shows October activity; activity does not prove reliability or roadmap.",
+      "class": "trajectory",
+      "pub_date": "2026-10-01",
+      "recheck": "2027-04-01",
+      "stale": false
+    }
+  ],
+  "stale_count": 0,
+  "earliest_recheck": "2027-01-01",
+  "no_window_classes": []
+}

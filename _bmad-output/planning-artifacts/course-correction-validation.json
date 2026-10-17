@@ -1,0 +1,138 @@
+{
+  "kind": "planning-structural-validation",
+  "runtime_tests": "not-run",
+  "checks": [
+    {
+      "check": "epic_story_identity",
+      "passed": true,
+      "detail": {
+        "epics": 6,
+        "stories": 33
+      }
+    },
+    {
+      "check": "acceptance_identity",
+      "passed": true,
+      "detail": {
+        "acceptance_scenarios": 122
+      }
+    },
+    {
+      "check": "forward_implementable_dependencies",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "qa_exact_current_acceptance_mapping",
+      "passed": true,
+      "detail": {
+        "mapped": 122,
+        "missing": [],
+        "orphan": []
+      }
+    },
+    {
+      "check": "all_readiness_findings_have_real_acceptance",
+      "passed": true,
+      "detail": {
+        "findings": 15,
+        "invalid": []
+      }
+    },
+    {
+      "check": "requirement_FR1_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "requirement_FR2_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "requirement_FR3_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "requirement_FR4_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "requirement_FR5_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "requirement_FR6_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "requirement_FR7_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "requirement_FR8_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "requirement_FR9_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "requirement_FR10_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "requirement_FR11_retained",
+      "passed": true,
+      "detail": "PRD and epics"
+    },
+    {
+      "check": "stable_AD1_to_AD11",
+      "passed": true,
+      "detail": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11"
+      ]
+    },
+    {
+      "check": "local_markdown_targets_exist",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "check": "no_product_source_diff",
+      "passed": true,
+      "detail": "No tracked product source/dependency/Compose diff; pre-existing configuration changes retained."
+    }
+  ],
+  "passed": true,
+  "spine_lint": {
+    "ok": true,
+    "findings": 0
+  },
+  "tracking_validation": {
+    "valid": true,
+    "problems": [],
+    "epics": 6,
+    "stories": 33,
+    "all_stories": "backlog",
+    "parser_warnings": []
+  }
+}

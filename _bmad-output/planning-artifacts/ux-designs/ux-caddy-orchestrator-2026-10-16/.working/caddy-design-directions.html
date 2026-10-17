@@ -1,0 +1,255 @@
+<div id="caddy-directions">
+  <style>
+    #caddy-directions .cd-stage { min-height: 790px; }
+    #caddy-directions .cd-product { --cd-bg: light-dark(#f5f3ef,#202220); --cd-panel: light-dark(#fffefa,#282b28); --cd-ink: light-dark(#252c28,#e8ebe5); --cd-muted: light-dark(#626a62,#b1b9ae); --cd-line: light-dark(#dedfd6,#41473f); --cd-soft: light-dark(#edece4,#343b32); --cd-accent: light-dark(#435e47,#b4c9a7); --cd-selected: light-dark(#e8eee2,#364331); --cd-glass: light-dark(#f7f8f3df,#303630e8); --cd-shadow: light-dark(#292e2612,#00000024); --cd-radius: 16px; --cd-row-space: 21px; box-sizing: border-box; min-height: 770px; color: var(--cd-ink); background: var(--cd-bg); border: 1px solid var(--cd-line); border-radius: var(--cd-radius); font: 400 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    #caddy-directions .cd-product *, #caddy-directions .cd-product *::before, #caddy-directions .cd-product *::after { box-sizing: border-box; }
+    #caddy-directions .cd-product button, #caddy-directions .cd-product input { font: inherit; color: inherit; }
+    #caddy-directions .cd-product button { cursor: inherit; }
+    #caddy-directions .cd-product h2, #caddy-directions .cd-product h3, #caddy-directions .cd-product p { margin: 0; }
+    #caddy-directions .cd-product h2 { font-size: 26px; font-weight: 500; letter-spacing: -.6px; line-height: 1.2; }
+    #caddy-directions .cd-product h3 { font-size: 16px; font-weight: 500; }
+    #caddy-directions .cd-muted { color: var(--cd-muted); }
+    #caddy-directions .cd-small { font-size: 12px; }
+    #caddy-directions .cd-mono { font-family: ui-monospace,SFMono-Regular,Consolas,monospace; font-size: 12px; overflow-wrap: anywhere; }
+    #caddy-directions .cd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 23px 30px; border-bottom: 1px solid var(--cd-line); }
+    #caddy-directions .cd-brand { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+    #caddy-directions .cd-brand-mark { display: grid; place-items: center; width: 28px; height: 28px; background: var(--cd-accent); color: var(--cd-panel); border-radius: 8px; font-size: 16px; }
+    #caddy-directions .cd-demo { margin-left: auto; color: var(--cd-muted); font-size: 12px; padding-right: 76px; }
+    #caddy-directions .cd-location { color: var(--cd-muted); font-size: 12px; }
+    #caddy-directions .cd-main { padding: 30px; min-width: 0; }
+    #caddy-directions .cd-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 26px; }
+    #caddy-directions .cd-heading p { margin-top: 8px; }
+    #caddy-directions .cd-search { display: grid; gap: 5px; width: 230px; max-width: 100%; color: var(--cd-muted); font-size: 12px; }
+    #caddy-directions .cd-search input { width: 100%; min-width: 0; height: 40px; padding: 9px 12px; color: var(--cd-ink); background: var(--cd-panel); border: 1px solid var(--cd-line); border-radius: calc(var(--cd-radius) * .6); font-size: 14px; }
+    #caddy-directions .cd-service-list { display: grid; background: var(--cd-panel); border: 1px solid var(--cd-line); border-radius: var(--cd-radius); }
+    #caddy-directions .cd-service { width: 100%; display: grid; grid-template-columns: 36px minmax(0,1fr) minmax(0,.8fr) 18px; align-items: center; gap: 14px; padding: var(--cd-row-space) 20px; text-align: left; border: 0; background: transparent; border-bottom: 1px solid var(--cd-line); }
+    #caddy-directions .cd-service:first-child { border-radius: var(--cd-radius) var(--cd-radius) 0 0; }
+    #caddy-directions .cd-service:last-child { border-bottom: 0; border-radius: 0 0 var(--cd-radius) var(--cd-radius); }
+    #caddy-directions .cd-service[aria-pressed="true"] { background: var(--cd-selected); }
+    #caddy-directions .cd-service:hover { background: var(--cd-soft); }
+    #caddy-directions .cd-service[hidden] { display: none; }
+    #caddy-directions .cd-tile { display: grid; place-items: center; width: 36px; height: 36px; background: var(--cd-soft); border-radius: 10px; color: var(--cd-accent); font-size: 13px; font-weight: 500; }
+    #caddy-directions .cd-service-name { display: block; font-weight: 500; }
+    #caddy-directions .cd-service-domain { display: block; margin-top: 3px; color: var(--cd-muted); font-size: 12px; overflow-wrap: anywhere; }
+    #caddy-directions .cd-service-endpoint { color: var(--cd-muted); overflow-wrap: anywhere; }
+    #caddy-directions .cd-arrow { color: var(--cd-muted); }
+    #caddy-directions .cd-list-caption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 13px 1px; color: var(--cd-muted); font-size: 12px; }
+    #caddy-directions .cd-detail { min-width: 0; margin-top: 24px; padding: 21px 22px; background: var(--cd-panel); border: 1px solid var(--cd-line); border-radius: var(--cd-radius); }
+    #caddy-directions .cd-detail-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+    #caddy-directions .cd-readonly { color: var(--cd-muted); font-size: 12px; }
+    #caddy-directions .cd-detail dl { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 24px; margin: 0; }
+    #caddy-directions .cd-detail dl > div { min-width: 0; }
+    #caddy-directions .cd-detail dt { color: var(--cd-muted); font-size: 12px; margin-bottom: 4px; }
+    #caddy-directions .cd-detail dd { margin: 0; overflow-wrap: anywhere; }
+    #caddy-directions .cd-foot { display: flex; flex-wrap: wrap; gap: 8px 22px; padding: 18px 30px; color: var(--cd-muted); font-size: 12px; }
+    #caddy-directions .cd-empty { padding: 30px 20px; color: var(--cd-muted); }
+    #caddy-directions .cd-glass { --cd-bg: light-dark(#e9ede8,#1d2521); --cd-panel: light-dark(#fcfdfb,#29312d); --cd-soft: light-dark(#e5eae5,#38423b); --cd-selected: light-dark(#e6eee8,#35463c); --cd-accent: light-dark(#476455,#afcbb9); background: radial-gradient(ellipse at 18% 10%,light-dark(#d8e1d1,#2e3a2c),transparent 62%),var(--cd-bg); }
+    #caddy-directions .cd-glass .cd-top { margin: 12px 12px 0; padding: 15px 20px; background: var(--cd-glass); backdrop-filter: blur(16px); border: 1px solid var(--cd-line); border-radius: calc(var(--cd-radius) * .75); box-shadow: 0 4px 20px var(--cd-shadow); }
+    #caddy-directions .cd-glass-layout { display: grid; grid-template-columns: 150px minmax(0,1fr); min-height: 624px; }
+    #caddy-directions .cd-sidebar { padding: 30px 15px; }
+    #caddy-directions .cd-sidebar-label { display: block; margin: 0 9px 12px; color: var(--cd-muted); font-size: 12px; }
+    #caddy-directions .cd-nav-current { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--cd-glass); border: 1px solid var(--cd-line); border-radius: 10px; font-weight: 500; }
+    #caddy-directions .cd-sidebar-note { margin: 24px 10px 0; color: var(--cd-muted); font-size: 12px; }
+    #caddy-directions .cd-glass .cd-main { padding: 28px 24px 18px 8px; }
+    #caddy-directions .cd-split { display: grid; grid-template-columns: minmax(0,1fr) minmax(220px,.92fr); gap: 16px; align-items: start; }
+    #caddy-directions .cd-glass .cd-service { grid-template-columns: 32px minmax(0,1fr) 10px; padding: var(--cd-row-space) 13px; gap: 10px; }
+    #caddy-directions .cd-glass .cd-tile { width: 32px; height: 32px; }
+    #caddy-directions .cd-glass .cd-detail { margin-top: 0; padding: 20px; min-height: 375px; }
+    #caddy-directions .cd-glass .cd-detail dl { grid-template-columns: 1fr; gap: 20px; }
+    #caddy-directions .cd-glass .cd-detail-head { display: block; margin-bottom: 23px; }
+    #caddy-directions .cd-glass .cd-readonly { display: block; margin-top: 7px; }
+    #caddy-directions .cd-glass .cd-list-caption { display: block; }
+    #caddy-directions .cd-instrument { --cd-bg: light-dark(#f1f2ee,#222723); --cd-panel: light-dark(#fafbf7,#29302a); --cd-soft: light-dark(#e8eae2,#363f35); --cd-selected: light-dark(#e4eadb,#384733); --cd-accent: light-dark(#465d39,#bdd0a5); --cd-radius: 7px; --cd-row-space: 15px; }
+    #caddy-directions .cd-instrument .cd-top { padding: 17px 24px; }
+    #caddy-directions .cd-instrument .cd-main { padding: 28px 24px; }
+    #caddy-directions .cd-instrument .cd-heading { margin-bottom: 23px; }
+    #caddy-directions .cd-context { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 10px 0 18px; font-size: 12px; color: var(--cd-muted); }
+    #caddy-directions .cd-table { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--cd-panel); border-block: 1px solid var(--cd-line); }
+    #caddy-directions .cd-table th { text-align: left; padding: 11px 13px; color: var(--cd-muted); font-size: 12px; font-weight: 400; border-bottom: 1px solid var(--cd-line); }
+    #caddy-directions .cd-table td { padding: var(--cd-row-space) 13px; border-bottom: 1px solid var(--cd-line); overflow-wrap: anywhere; }
+    #caddy-directions .cd-table tbody tr:last-child td { border-bottom: 0; }
+    #caddy-directions .cd-table tr[hidden] { display: none; }
+    #caddy-directions .cd-table tr[data-selected="true"] { background: var(--cd-selected); }
+    #caddy-directions .cd-table button { padding: 2px 0; background: transparent; color: var(--cd-ink); border: 0; font-weight: 500; text-align: left; text-decoration: underline; text-decoration-color: var(--cd-line); text-underline-offset: 4px; }
+    #caddy-directions .cd-table button:hover { text-decoration-color: var(--cd-accent); }
+    #caddy-directions .cd-instrument .cd-detail { border-inline: 0; padding-inline: 0; background: transparent; border-radius: 0; }
+    #caddy-directions .cd-instrument .cd-detail dl { grid-template-columns: 1.1fr 1.1fr .8fr; }
+    #caddy-directions .cd-instrument .cd-foot { border-top: 1px solid var(--cd-line); padding-inline: 24px; }
+    @media (max-width: 800px) {
+      #caddy-directions .cd-glass-layout { grid-template-columns: 1fr; }
+      #caddy-directions .cd-sidebar { display: flex; align-items: center; gap: 12px; padding: 20px 24px 0; }
+      #caddy-directions .cd-sidebar-label { margin: 0; }
+      #caddy-directions .cd-sidebar-note { margin: 0 0 0 auto; }
+      #caddy-directions .cd-glass .cd-main { padding: 24px; }
+      #caddy-directions .cd-glass .cd-heading { margin-bottom: 20px; }
+    }
+    @media (max-width: 620px) {
+      #caddy-directions .cd-stage, #caddy-directions .cd-product { min-height: 1320px; }
+      #caddy-directions .cd-top, #caddy-directions .cd-instrument .cd-top { padding: 19px 16px; gap: 10px; }
+      #caddy-directions .cd-demo { margin-left: 0; padding-right: 84px; flex-basis: 100%; }
+      #caddy-directions .cd-location { margin-left: auto; }
+      #caddy-directions .cd-main, #caddy-directions .cd-glass .cd-main, #caddy-directions .cd-instrument .cd-main { padding: 24px 16px; }
+      #caddy-directions .cd-heading { display: grid; gap: 19px; }
+      #caddy-directions .cd-product h2 { font-size: 24px; }
+      #caddy-directions .cd-search { width: 100%; }
+      #caddy-directions .cd-search input { font-size: 16px; }
+      #caddy-directions .cd-service { grid-template-columns: 30px minmax(0,1fr) 10px; padding: var(--cd-row-space) 13px; gap: 10px; }
+      #caddy-directions .cd-tile { width: 30px; height: 30px; }
+      #caddy-directions .cd-service-endpoint { grid-column: 2; grid-row: 2; font-size: 12px; }
+      #caddy-directions .cd-arrow { grid-column: 3; grid-row: 1; }
+      #caddy-directions .cd-detail { padding: 18px; }
+      #caddy-directions .cd-detail dl { grid-template-columns: 1fr; gap: 15px; }
+      #caddy-directions .cd-foot { padding: 10px 16px 24px; }
+      #caddy-directions .cd-glass .cd-top { margin: 8px 8px 0; padding: 15px 12px; }
+      #caddy-directions .cd-sidebar { padding: 18px 16px 0; flex-wrap: wrap; }
+      #caddy-directions .cd-sidebar-note { margin-left: 0; }
+      #caddy-directions .cd-split { grid-template-columns: 1fr; }
+      #caddy-directions .cd-glass .cd-service { padding-block: max(14px,var(--cd-row-space)); }
+      #caddy-directions .cd-glass .cd-detail { min-height: 0; }
+      #caddy-directions .cd-glass .cd-detail dl { gap: 12px; }
+      #caddy-directions .cd-glass .cd-detail-head { margin-bottom: 17px; }
+      #caddy-directions .cd-table, #caddy-directions .cd-table tbody, #caddy-directions .cd-table tr, #caddy-directions .cd-table td { display: block; }
+      #caddy-directions .cd-table thead { display: none; }
+      #caddy-directions .cd-table tr { padding: 12px 13px; border-bottom: 1px solid var(--cd-line); }
+      #caddy-directions .cd-table td { padding: 2px 0; border: 0; }
+      #caddy-directions .cd-table td[data-label]::before { content: attr(data-label) " "; color: var(--cd-muted); font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size: 12px; }
+      #caddy-directions .cd-table td.cd-owner { padding-top: 8px; }
+      #caddy-directions .cd-instrument .cd-detail dl { grid-template-columns: 1fr; }
+      #caddy-directions .cd-instrument .cd-foot { padding-inline: 16px; }
+    }
+    @media (pointer: coarse) {
+      #caddy-directions .cd-table button { min-height: 44px; }
+      #caddy-directions .cd-search input { min-height: 44px; font-size: 16px; }
+    }
+  </style>
+  <div class="viz-carousel" aria-label="Направления интерфейса Caddy" data-previous-label="Предыдущий вариант" data-next-label="Следующий вариант">
+    <section class="cd-stage" data-variant="Тихая мастерская" aria-label="Тихая мастерская">
+      <div class="cd-product cd-workshop" data-mock="workshop" aria-label="Тихая мастерская — просторный список">
+        <header class="cd-top"><div class="cd-brand"><span class="cd-brand-mark">C</span>Caddy</div><span class="cd-location">Домашняя лаборатория</span><span class="cd-demo">Пример · не live</span></header>
+        <main class="cd-main">
+          <div class="cd-heading"><div><h2>Маршруты</h2><p class="cd-muted">Знакомые сервисы. Всё на своём месте.</p></div><label class="cd-search">Найти сервис<input type="search" data-search placeholder="Название или домен" aria-label="Найти сервис в мастерской"></label></div>
+          <div class="cd-service-list" aria-label="Внешние маршруты">
+            <button class="cd-service cursor-interaction" type="button" data-service="immich" aria-pressed="true"><span class="cd-tile" aria-hidden="true">Im</span><span><span class="cd-service-name">Immich</span><span class="cd-service-domain">photo.home.example</span></span><span class="cd-service-endpoint cd-mono">immich.lan:2283</span><span class="cd-arrow" aria-hidden="true">›</span></button>
+            <button class="cd-service cursor-interaction" type="button" data-service="home" aria-pressed="false"><span class="cd-tile" aria-hidden="true">HA</span><span><span class="cd-service-name">Home Assistant</span><span class="cd-service-domain">home.home.example</span></span><span class="cd-service-endpoint cd-mono">homeassistant.lan:8123</span><span class="cd-arrow" aria-hidden="true">›</span></button>
+            <button class="cd-service cursor-interaction" type="button" data-service="cloud" aria-pressed="false"><span class="cd-tile" aria-hidden="true">Nc</span><span><span class="cd-service-name">Nextcloud</span><span class="cd-service-domain">cloud.home.example</span></span><span class="cd-service-endpoint cd-mono">nextcloud.lan:8080</span><span class="cd-arrow" aria-hidden="true">›</span></button>
+            <button class="cd-service cursor-interaction" type="button" data-service="pve" aria-pressed="false"><span class="cd-tile" aria-hidden="true">Px</span><span><span class="cd-service-name">Proxmox</span><span class="cd-service-domain">pve.home.example</span></span><span class="cd-service-endpoint cd-mono">https://proxmox.lan:8006</span><span class="cd-arrow" aria-hidden="true">›</span></button>
+            <p class="cd-empty" data-empty hidden>Совпадений нет</p>
+          </div>
+          <div class="cd-list-caption"><span>Внешние · только чтение</span><span>Выберите сервис для просмотра</span></div>
+          <section class="cd-detail" aria-label="Сведения о выбранном маршруте" aria-live="polite"><div class="cd-detail-head"><h3 data-detail-name>Immich</h3><span class="cd-readonly">Внешний · только чтение</span></div><dl><div><dt>Домен</dt><dd class="cd-mono" data-detail-domain>photo.home.example</dd></div><div><dt>Назначение</dt><dd class="cd-mono" data-detail-upstream>immich.lan:2283</dd></div></dl></section>
+        </main>
+        <footer class="cd-foot"><span>Данные API не загружены</span><span>Структура разделов — эскиз</span></footer>
+      </div>
+    </section>
+    <section class="cd-stage" data-variant="Матовое стекло" aria-label="Матовое стекло" hidden>
+      <div class="cd-product cd-glass" data-mock="glass" aria-label="Матовое стекло — список и сведения рядом">
+        <header class="cd-top"><div class="cd-brand"><span class="cd-brand-mark">C</span>Caddy</div><span class="cd-location">Домашняя лаборатория</span><span class="cd-demo">Пример · не live</span></header>
+        <div class="cd-glass-layout">
+          <aside class="cd-sidebar"><span class="cd-sidebar-label">Лаборатория</span><div class="cd-nav-current" aria-current="page"><i data-lucide="waypoints" aria-hidden="true"></i>Маршруты</div><p class="cd-sidebar-note">Структура разделов — эскиз</p></aside>
+          <main class="cd-main">
+            <div class="cd-heading"><div><h2>Маршруты</h2><p class="cd-muted cd-small">Внешние · только чтение</p></div><label class="cd-search">Найти сервис<input type="search" data-search placeholder="Название или домен" aria-label="Найти сервис в стеклянном варианте"></label></div>
+            <div class="cd-split"><div><div class="cd-service-list" aria-label="Внешние маршруты">
+              <button class="cd-service cursor-interaction" type="button" data-service="immich" aria-pressed="true"><span class="cd-tile" aria-hidden="true">Im</span><span><span class="cd-service-name">Immich</span><span class="cd-service-domain">photo.home.example</span></span><span class="cd-arrow" aria-hidden="true">›</span></button>
+              <button class="cd-service cursor-interaction" type="button" data-service="home" aria-pressed="false"><span class="cd-tile" aria-hidden="true">HA</span><span><span class="cd-service-name">Home Assistant</span><span class="cd-service-domain">home.home.example</span></span><span class="cd-arrow" aria-hidden="true">›</span></button>
+              <button class="cd-service cursor-interaction" type="button" data-service="cloud" aria-pressed="false"><span class="cd-tile" aria-hidden="true">Nc</span><span><span class="cd-service-name">Nextcloud</span><span class="cd-service-domain">cloud.home.example</span></span><span class="cd-arrow" aria-hidden="true">›</span></button>
+              <button class="cd-service cursor-interaction" type="button" data-service="pve" aria-pressed="false"><span class="cd-tile" aria-hidden="true">Px</span><span><span class="cd-service-name">Proxmox</span><span class="cd-service-domain">pve.home.example</span></span><span class="cd-arrow" aria-hidden="true">›</span></button>
+              <p class="cd-empty" data-empty hidden>Совпадений нет</p>
+            </div><p class="cd-list-caption">Выберите сервис для просмотра</p></div>
+            <section class="cd-detail" aria-label="Сведения о выбранном маршруте" aria-live="polite"><div class="cd-detail-head"><h3 data-detail-name>Immich</h3><span class="cd-readonly">Внешний · только чтение</span></div><dl><div><dt>Домен</dt><dd class="cd-mono" data-detail-domain>photo.home.example</dd></div><div><dt>Назначение</dt><dd class="cd-mono" data-detail-upstream>immich.lan:2283</dd></div><div><dt>Данные Caddy</dt><dd class="cd-small cd-muted">API не загружен</dd></div></dl></section></div>
+          </main>
+        </div>
+        <footer class="cd-foot"><span>Данные API не загружены</span></footer>
+      </div>
+    </section>
+    <section class="cd-stage" data-variant="Точный инструмент" aria-label="Точный инструмент" hidden>
+      <div class="cd-product cd-instrument" data-mock="instrument" aria-label="Точный инструмент — инженерная таблица">
+        <header class="cd-top"><div class="cd-brand"><span class="cd-brand-mark">C</span>Caddy</div><span class="cd-location">/ Маршруты</span><span class="cd-demo">Пример · не live</span></header>
+        <main class="cd-main">
+          <div class="cd-heading"><div><h2>Маршруты</h2><p class="cd-muted cd-small">Домашняя лаборатория</p></div><label class="cd-search">Найти сервис<input type="search" data-search placeholder="Название или домен" aria-label="Найти сервис в таблице"></label></div>
+          <div class="cd-context"><span>Источник: пример конфигурации</span><span>Режим: только чтение</span></div>
+          <table class="cd-table"><colgroup><col style="width:22%"><col style="width:27%"><col style="width:30%"><col style="width:21%"></colgroup><thead><tr><th scope="col">Сервис</th><th scope="col">Домен</th><th scope="col">Назначение</th><th scope="col">Управление</th></tr></thead><tbody>
+            <tr data-service-row="immich" data-selected="true"><td><button class="cursor-interaction" type="button" data-service="immich" aria-pressed="true">Immich</button></td><td class="cd-mono" data-label="Домен:">photo.home.example</td><td class="cd-mono" data-label="В:">immich.lan:2283</td><td class="cd-owner cd-small cd-muted">Внешний · только чтение</td></tr>
+            <tr data-service-row="home"><td><button class="cursor-interaction" type="button" data-service="home" aria-pressed="false">Home Assistant</button></td><td class="cd-mono" data-label="Домен:">home.home.example</td><td class="cd-mono" data-label="В:">homeassistant.lan:8123</td><td class="cd-owner cd-small cd-muted">Внешний · только чтение</td></tr>
+            <tr data-service-row="cloud"><td><button class="cursor-interaction" type="button" data-service="cloud" aria-pressed="false">Nextcloud</button></td><td class="cd-mono" data-label="Домен:">cloud.home.example</td><td class="cd-mono" data-label="В:">nextcloud.lan:8080</td><td class="cd-owner cd-small cd-muted">Внешний · только чтение</td></tr>
+            <tr data-service-row="pve"><td><button class="cursor-interaction" type="button" data-service="pve" aria-pressed="false">Proxmox</button></td><td class="cd-mono" data-label="Домен:">pve.home.example</td><td class="cd-mono" data-label="В:">https://proxmox.lan:8006</td><td class="cd-owner cd-small cd-muted">Внешний · только чтение</td></tr>
+          </tbody></table><p class="cd-empty" data-empty hidden>Совпадений нет</p>
+          <div class="cd-list-caption"><span>Выберите название сервиса для просмотра</span></div>
+          <section class="cd-detail" aria-label="Сведения о выбранном маршруте" aria-live="polite"><div class="cd-detail-head"><h3 data-detail-name>Immich</h3><span class="cd-readonly">Внешний · только чтение</span></div><dl><div><dt>Домен</dt><dd class="cd-mono" data-detail-domain>photo.home.example</dd></div><div><dt>Назначение</dt><dd class="cd-mono" data-detail-upstream>immich.lan:2283</dd></div><div><dt>Данные Caddy</dt><dd class="cd-small cd-muted">API не загружен</dd></div></dl></section>
+        </main>
+        <footer class="cd-foot"><span>Данные API не загружены</span><span>Структура разделов — эскиз</span></footer>
+      </div>
+    </section>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('caddy-directions');
+      const services = {
+        immich: { name: 'Immich', domain: 'photo.home.example', upstream: 'immich.lan:2283' },
+        home: { name: 'Home Assistant', domain: 'home.home.example', upstream: 'homeassistant.lan:8123' },
+        cloud: { name: 'Nextcloud', domain: 'cloud.home.example', upstream: 'nextcloud.lan:8080' },
+        pve: { name: 'Proxmox', domain: 'pve.home.example', upstream: 'https://proxmox.lan:8006' }
+      };
+      const snapshots = {};
+      const mocks = Array.from(root.querySelectorAll('[data-mock]'));
+      const save = () => {
+        if (window.openai && typeof window.openai.setWidgetState === 'function') {
+          window.openai.setWidgetState({ modelContent: { selectedServices: Object.fromEntries(Object.entries(snapshots).map(([key, value]) => [key, services[value.selected].name])) }, privateContent: { caddyDirections: snapshots } }).catch(() => {});
+        }
+      };
+      function select(mock, key) {
+        if (!services[key]) return;
+        snapshots[mock.dataset.mock].selected = key;
+        mock.querySelectorAll('[data-service]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.service === key)));
+        mock.querySelectorAll('[data-service-row]').forEach(row => row.dataset.selected = String(row.dataset.serviceRow === key));
+        mock.querySelector('[data-detail-name]').textContent = services[key].name;
+        mock.querySelector('[data-detail-domain]').textContent = services[key].domain;
+        mock.querySelector('[data-detail-upstream]').textContent = services[key].upstream;
+      }
+      function filter(mock, query) {
+        const normalized = query.trim().toLocaleLowerCase('ru');
+        snapshots[mock.dataset.mock].query = query;
+        let matches = 0;
+        mock.querySelectorAll('[data-service]').forEach(button => {
+          const service = services[button.dataset.service];
+          const visible = [service.name, service.domain, service.upstream].some(value => value.toLocaleLowerCase('ru').includes(normalized));
+          const item = button.closest('[data-service-row]') || button;
+          item.hidden = !visible;
+          if (visible) matches += 1;
+        });
+        mock.querySelector('[data-empty]').hidden = matches !== 0;
+      }
+      mocks.forEach(mock => {
+        snapshots[mock.dataset.mock] = { selected: 'immich', query: '' };
+        mock.querySelectorAll('[data-service]').forEach(button => button.addEventListener('click', () => { select(mock, button.dataset.service); save(); }));
+        mock.querySelector('[data-search]').addEventListener('input', event => { filter(mock, event.target.value); save(); });
+        const design = { spacing: mock.dataset.mock === 'instrument' ? 15 : 21, radius: mock.dataset.mock === 'instrument' ? 7 : 16 };
+        const renderDesign = () => {
+          mock.style.setProperty('--cd-row-space', design.spacing + 'px');
+          mock.style.setProperty('--cd-radius', design.radius + 'px');
+        };
+        renderDesign();
+        if (globalThis.Tweak) {
+          const tweak = new Tweak({ container: mock, onChange: renderDesign });
+          tweak.addSlider(design, 'spacing', { label: 'Воздух в строках', min: 10, max: 25, unit: 'px', reference: '--cd-row-space' });
+          tweak.addSlider(design, 'radius', { label: 'Скругление', min: 4, max: 22, unit: 'px', reference: '--cd-radius' });
+        }
+      });
+      function restore(saved) {
+        const state = saved && saved.privateContent && saved.privateContent.caddyDirections;
+        if (!state) return;
+        mocks.forEach(mock => {
+          const item = state[mock.dataset.mock];
+          if (!item) return;
+          select(mock, services[item.selected] ? item.selected : 'immich');
+          const query = typeof item.query === 'string' ? item.query.slice(0, 150) : '';
+          mock.querySelector('[data-search]').value = query;
+          filter(mock, query);
+        });
+      }
+      restore(window.openai && window.openai.widgetState);
+      window.addEventListener('openai:set_globals', event => {
+        if (event.detail && event.detail.globals && event.detail.globals.widgetState) restore(event.detail.globals.widgetState);
+      });
+    })();
+  </script>
+</div>

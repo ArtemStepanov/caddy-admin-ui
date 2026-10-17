@@ -1,0 +1,24 @@
+{
+  "status": "complete",
+  "intent": "run",
+  "type": "competitive",
+  "report": "_bmad-output/planning-artifacts/research/competitive-caddy-homelab-manager-2026-10-16/research.md",
+  "brief": "_bmad-output/planning-artifacts/research/competitive-caddy-homelab-manager-2026-10-16/brief.md",
+  "memlog": "_bmad-output/planning-artifacts/research/competitive-caddy-homelab-manager-2026-10-16/.memlog.md",
+  "claims": {
+    "verified": 2,
+    "unverified": 12,
+    "overturned": 0
+  },
+  "open_questions": [
+    "Primary operator priorities require direct task observation.",
+    "Target TLS modes, providers, Caddy builds and versions need explicit scope selection.",
+    "Existing implementation requires restart/recovery and real traffic verification.",
+    "Competitor capabilities and reported bugs were not exercised."
+  ],
+  "external_handoffs": [],
+  "limitations": [
+    "Caller subagents=none override; semantic and structure/prose checks inline, not fresh-context independent review.",
+    "Living documentation publication dates unknown; acquisition month used solely as staleness proxy."
+  ]
+}

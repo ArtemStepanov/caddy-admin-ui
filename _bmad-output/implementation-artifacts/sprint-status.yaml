@@ -1,0 +1,87 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 10-17-2026 08:48
+last_updated: 10-17-2026 08:48
+project: caddy-orchestrator
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-1: backlog
+  1-1-secure-manager-only-startup-and-application-seams: backlog
+  1-2-protected-source-and-immutable-secret-version-storage: backlog
+  1-3-transactional-legacy-migration-and-scoped-history-access: backlog
+  1-4-lossless-source-identity-and-preservation-mapping-engine: backlog
+  1-5-target-connection-and-honest-build-source-context: backlog
+  1-6-reviewed-adoption-without-remote-mutation: backlog
+  1-7-revisioned-durable-shared-draft: backlog
+  1-8-bound-source-runtime-review-and-conflict-safe-rebase: backlog
+  1-9-durable-guarded-apply-and-immediate-restore: backlog
+  1-10-first-service-workspace-with-verification-and-recovery: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-complete-route-forms-and-retained-feature-validation: backlog
+  2-2-peer-caddyfile-editor-and-guarded-form-switching: backlog
+  2-3-optional-docker-suggestions-with-manual-destinations: backlog
+  2-4-searchable-responsive-route-dashboard: backlog
+  2-5-complete-supported-global-server-forms-and-coverage-inventor: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-complete-change-bar-and-unsaved-input-navigation: backlog
+  3-2-accessible-redacted-diff-across-full-configuration: backlog
+  3-3-explicit-drift-and-rebase-conflict-resolution-ui: backlog
+  3-4-cross-session-stale-save-and-reconnect-experience: backlog
+  3-5-interrupted-operation-reconciliation-experience: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-complete-public-https-settings-and-lifecycle-evidence: backlog
+  4-2-dns-01-and-wildcards-with-build-and-secret-evidence: backlog
+  4-3-internal-ca-with-explicit-root-and-client-trust-workflow: backlog
+  4-4-independent-https-upstream-transport-and-trust: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-complete-asynchronous-revision-bound-manager-probes: backlog
+  5-2-redirect-and-known-resource-file-checks: backlog
+  5-3-bounded-browser-observations-and-scoped-csp: backlog
+  5-4-complete-evidence-stale-result-and-retry-interface: backlog
+  5-5-evidence-based-diagnosis-and-remediation: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-complete-scoped-history-list-and-export: backlog
+  6-2-historical-comparison-against-current-live-state: backlog
+  6-3-complete-reviewed-history-restore-experience: backlog
+  6-4-complete-backup-upgrade-and-maintenance-runbooks: backlog
+  epic-6-retrospective: optional
